@@ -16,6 +16,7 @@ def main(page: ft.Page):
     """
     logger.info("Iniciando a aplicação Flet...")
 
+
     page.title = "Analisador de Movimentos de Krav Maga (Flet)"
     page.vertical_alignment = ft.MainAxisAlignment.CENTER
     page.window_width = 1200
