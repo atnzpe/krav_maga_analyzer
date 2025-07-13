@@ -1,0 +1,7 @@
+flet
+logging
+streamlit
+
+opencv-python
+mediapipe
+numpy
