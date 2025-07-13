@@ -104,12 +104,17 @@ Siga os passos abaixo para configurar e executar a aplicação no seu ambiente.
 
 
 krav_maga_analyzer/
+
 ├── .gitignore                # Arquivos e pastas a serem ignorados pelo Git
+
 ├── README.md                 # Este arquivo de documentação
+
 ├── requirements.txt          # Lista de dependências do Python
+
 ├── videos/                   # Diretório para armazenar vídeos de exemplo ou teste
 │   ├── master                #   Subdiretório para vídeos do mestre
 │   └── user                  #   Subdiretório para vídeos do usuário/aluno
+
 ├── src/                      # Código fonte da aplicação
 │   ├── main_flet.py          # Ponto de entrada da aplicação Flet (prioridade atual)
 │   ├── main_streamlit.py     # Ponto de entrada da aplicação Streamlit (protótipo/web)
@@ -118,11 +123,13 @@ krav_maga_analyzer/
 │   ├── movement_comparer.py  # Módulo para lógica de comparação de movimentos (futuro)
 │   ├── feedback_generator.py # Módulo para gerar feedback ao usuário (futuro)
 │   └── utils.py  #Funções utilitárias diversas (e.g., setup_logging)
+
 ├── tests/                    # Testes automatizados para os módulos
 │   ├── test_video_analyzer.py
 │   ├── test_pose_estimator.py
 │   ├── test_main_streamlit.py # Testes para a aplicação Streamlit
 │   └── test_main_flet.py      # Testes para a aplicação Flet (futuro)
+
 └── logs/                     # Diretório para arquivos de log da aplicação
 └── app.log               # Arquivo de log principal da aplicação
 
