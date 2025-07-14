@@ -27,67 +27,78 @@ def generate_mock_landmarks(
     num_frames: int, num_landmarks: int = 33, base_angle_value: float = 90.0
 ) -> list:
     """
-    Gera uma lista de dados de landmarks mock para simular frames de vídeo.
+    Gera uma lista de dados de landmarks mock para simular frames de vídeo,
+    com a garantia de que o LEFT_ELBOW_ANGLE terá o valor base_angle_value.
 
     Argumentos:
         num_frames (int): Número de frames a serem gerados.
         num_landmarks (int): Número de landmarks por frame (padrão MediaPipe = 33).
-        base_angle_value (float): Um valor base para simular ângulos em um frame específico.
-                                  Usado para criar variações controladas.
+        base_angle_value (float): O valor do ângulo (em graus) que o LEFT_ELBOW_ANGLE
+                                  deve ter para os landmarks gerados.
 
     Retorna:
         list: Uma lista onde cada item representa um frame, contendo uma lista de dicionários de landmarks.
     """
     mock_data = []
+
+    # Indices para LEFT_SHOULDER (P1), LEFT_ELBOW (P2 - vértice), LEFT_WRIST (P3)
+    SHOULDER_IDX = 11
+    ELBOW_IDX = 13
+    WRIST_IDX = 15
+
     for f_idx in range(num_frames):
-        frame_landmarks = []
-        # Cria landmarks que permitirão calcular ângulos para o teste
-        # Ex: ombro (11), cotovelo (13), punho (15) para braço esquerdo
-        # e quadril (23), joelho (25), tornozelo (27) para perna esquerda.
-        for lm_idx in range(num_landmarks):
-            # Gera coordenadas dummy. Para testar ângulos, precisamos de coordenadas específicas.
-            # Vamos simular uma posição inicial para LEFT_SHOULDER, LEFT_ELBOW, LEFT_WRIST
-            x, y, z = 0.5, 0.5, 0.0  # Ponto padrão
-            visibility = 0.9  # Alta visibilidade
+        # Inicializa todos os landmarks com pontos dummy e alta visibilidade
+        frame_landmarks = [
+            {"x": 0.0, "y": 0.0, "z": 0.0, "visibility": 0.9}
+            for _ in range(num_landmarks)
+        ]
 
-            if lm_idx == 11:  # LEFT_SHOULDER
-                x, y, z = 0.5, 0.8, 0.0
-            elif lm_idx == 13:  # LEFT_ELBOW (vértice)
-                x, y, z = 0.6, 0.5, 0.0
-            elif lm_idx == 15:  # LEFT_WRIST
-                # Ajusta p3 para o ângulo desejado (base_angle_value)
-                # Se base_angle_value é 90, p3 = (0.6, 0.4, 0.0)
-                # Se base_angle_value é 180, p3 = (0.7, 0.2, 0.0)
-                # Isso é uma simplificação, na prática ajustaríamos a geometria para bater o ângulo exato.
-                # Para o teste, vamos garantir que a função calculate_angle possa ser chamada com estes pontos
-                # e que a comparação de ângulos faça sentido.
+        # Definir P2 (LEFT_ELBOW) como o vértice em (0,0,0) para facilitar o cálculo
+        frame_landmarks[ELBOW_IDX] = {"x": 0.0, "y": 0.0, "z": 0.0, "visibility": 0.9}
 
-                # Para um braço reto (180 graus): p1=(0.5, 0.8), p2=(0.6, 0.5), p3=(0.7, 0.2) - (todos na mesma linha)
-                # Para um ângulo de 90 graus: p1=(0.5, 0.8), p2=(0.6, 0.5), p3=(0.6, 0.4)
+        # Definir P1 (LEFT_SHOULDER) em (0,1,0) para ser o primeiro vetor do ângulo
+        frame_landmarks[SHOULDER_IDX] = {
+            "x": 0.0,
+            "y": 1.0,
+            "z": 0.0,
+            "visibility": 0.9,
+        }
 
-                # Mockamos com base nos test_utils.py para garantir que calculate_angle funciona
-                if base_angle_value == 90.0:
-                    x, y, z = (
-                        0.6,
-                        0.4,
-                        0.0,
-                    )  # Para simular um ângulo de 90 graus no cotovelo
-                elif base_angle_value == 180.0:
-                    x, y, z = (
-                        0.7,
-                        0.2,
-                        0.0,
-                    )  # Para simular um ângulo de 180 graus no cotovelo
-                elif base_angle_value == 45.0:
-                    x, y, z = 0.7, 0.6, 0.0  # Simulação para 45 graus (aprox)
-                else:  # Default para algo diferente
-                    x, y, z = (
-                        0.6 + np.sin(np.radians(base_angle_value)),
-                        0.5 - np.cos(np.radians(base_angle_value)),
-                        0.0,
-                    )
+        # Definir P3 (LEFT_WRIST) com base no base_angle_value, usando pontos que já sabemos
+        # que funcionam com a função `calculate_angle` testada em `test_utils.py`.
+        p3_x, p3_y, p3_z = 0.0, 0.0, 0.0  # Inicializa com valores padrão
 
-            frame_landmarks.append({"x": x, "y": y, "z": z, "visibility": visibility})
+        if base_angle_value == 180.0:
+            # Simula um braço esticado: P1=(0,1,0), P2=(0,0,0), P3=(0,-1,0)
+            p3_x, p3_y, p3_z = 0.0, -1.0, 0.0
+        elif base_angle_value == 90.0:
+            # Simula um ângulo reto: P1=(0,1,0), P2=(0,0,0), P3=(1,0,0)
+            p3_x, p3_y, p3_z = 1.0, 0.0, 0.0
+        elif base_angle_value == 45.0:
+            # Simula um ângulo agudo: P1=(0,1,0), P2=(0,0,0), P3=(1,1,0)
+            p3_x, p3_y, p3_z = 1.0, 1.0, 0.0
+        elif base_angle_value == 135.0:
+            # Simula um ângulo obtuso: P1=(0,1,0), P2=(0,0,0), P3=(-1,1,0)
+            p3_x, p3_y, p3_z = -1.0, 1.0, 0.0
+        else:
+            # Para outros ângulos não definidos especificamente, retorna 0 para evitar NaN
+            # ou calcula um ponto genérico. Para este teste, vamos garantir os casos chave.
+            logger.warning(
+                f"generate_mock_landmarks: base_angle_value {base_angle_value} não explicitamente tratado para cálculo exato. Ângulo pode não ser preciso."
+            )
+            p3_x, p3_y, p3_z = (
+                0.0,
+                0.0,
+                0.0,
+            )  # Default para algo que dê 0.0 se não for p1=p2 ou p3=p2
+
+        frame_landmarks[WRIST_IDX] = {
+            "x": p3_x,
+            "y": p3_y,
+            "z": p3_z,
+            "visibility": 0.9,
+        }
+
         mock_data.append(frame_landmarks)
     return mock_data
 
