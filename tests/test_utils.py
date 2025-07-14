@@ -70,14 +70,16 @@ class TestCalculateAngle:
         Testa o cálculo de um ângulo obtuso (135 graus).
         """
         logger.info("Executando test_obtuse_angle_135_degrees...")
-        # Pontos para um ângulo de 135 graus (aprox.)
+        # Pontos para um ângulo de 135 graus.
         p1 = {'x': 0.0, 'y': 1.0, 'z': 0.0}
         p2 = {'x': 0.0, 'y': 0.0, 'z': 0.0}
-        p3 = {'x': -1.0, 'y': 1.0, 'z': 0.0} # Este ponto forma 135 graus com (0,0) e (0,1)
+        # CORREÇÃO AQUI: Altere p3 para que o ângulo seja 135 graus
+        p3 = {'x': -1.0, 'y': -1.0, 'z': 0.0} # Este ponto forma 135 graus com (0,0,0) e (0,1,0)
         
         angle = calculate_angle(p1, p2, p3)
         assert angle == pytest.approx(135.0, abs=0.01)
         logger.info(f"Ângulo para 135 graus: {angle:.2f} graus. Teste PASSED.")
+
 
     def test_points_coincident(self):
         """
@@ -129,6 +131,7 @@ class TestCalculateAngle:
         logger.info(f"Ângulo para p1=p2: {angle:.2f} graus. Teste PASSED.")
 
     def test_p3_equals_p2(self):
+        
         """
         Testa o cenário onde o terceiro ponto é igual ao ponto do vértice.
         Deve retornar 0.0 devido a um vetor nulo.
