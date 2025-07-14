@@ -1,25 +1,18 @@
-import pytest  # Importa o framework de testes pytest
-from streamlit.testing.v1 import (
-    AppTest,
-)  # Importa a classe AppTest para testar aplicações Streamlit
-import os  # Módulo para interagir com o sistema operacional
-import sys  # Módulo para interagir com o interpretador Python (usado para sys.path)
-import numpy as np  # Importa NumPy para manipulação de arrays (necessário para o mock de frames)
-import io  # Módulo para trabalhar com streams de I/O (necessário para simular upload de arquivos)
+import pytest # Importa o framework de testes pytest
+from streamlit.testing.v1 import AppTest # Importa a classe AppTest para testar aplicações Streamlit
+import os # Módulo para interagir com o sistema operacional
+import sys # Módulo para interagir com o interpretador Python (usado para sys.path)
+import numpy as np # Importa NumPy para manipulação de arrays (necessário para o mock de frames)
+import io # Módulo para trabalhar com streams de I/O (necessário para simular upload de arquivos)
 
 # IMPORTANTE: Adiciona o diretório raiz do projeto ao sys.path para que as importações
 # de módulos como 'src.video_analyzer' funcionem corretamente durante os testes,
 # independentemente de onde o pytest é executado.
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-# Importa módulos internos que o main_streamlit.py importa (se necessário para mocks/fixtures)
-# from src.video_analyzer import VideoAnalyzer
-# from src.pose_estimator import PoseEstimator
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Nota: AppTest.from_file já cuida da importação do script principal da aplicação.
 # Se você tiver mocks complexos que precisam ser configurados antes de at.run(),
 # pode ser necessário importar os módulos aqui para mocar (como VideoAnalyzer).
-
 
 @pytest.fixture(autouse=True)
 def clean_streamlit_cache():
@@ -45,17 +38,15 @@ def test_streamlit_app_loads():
     # INFO: Criando uma instância do AppTest a partir do arquivo principal da aplicação Streamlit.
     # default_timeout define o tempo máximo de espera para a aplicação carregar.
     at = AppTest.from_file("src/main_streamlit.py", default_timeout=5)
-
+    
     # INFO: Executa a aplicação Streamlit no ambiente de teste.
     at.run()
 
     # Verifica se a execução foi bem-sucedida, ou seja, se não houve exceções
     # que interromperam o carregamento da aplicação.
     # `at.exception` retorna uma lista de exceções que ocorreram. Esperamos que esteja vazia.
-    assert (
-        len(at.exception) == 0
-    ), f"A aplicação Streamlit falhou ao carregar com exceções: {at.exception}"
-
+    assert len(at.exception) == 0, f"A aplicação Streamlit falhou ao carregar com exceções: {at.exception}"
+    
     # Verifica se o título principal da aplicação está presente na interface renderizada.
     # `at.title` acessa elementos de título. `at.title[0].value` pega o texto do primeiro título.
     # Ajuste o texto se o título exato em 'src/main_streamlit.py' for diferente.
@@ -71,14 +62,11 @@ def test_streamlit_initial_status_message():
     # INFO: Cria e executa a aplicação Streamlit.
     at = AppTest.from_file("src/main_streamlit.py", default_timeout=5)
     at.run()
-
+    
     # Verifica se a mensagem de aviso esperada é exibida.
     # `at.warning[0].body` acessa o corpo (texto) da primeira mensagem de aviso (`st.warning`).
     # Ajuste para `at.info[0].body` ou `at.text[0].value` se você usar `st.info` ou `st.text`.
-    assert (
-        "Por favor, carregue ambos os vídeos para iniciar a análise."
-        in at.warning[0].body
-    )
+    assert "Por favor, carregue ambos os vídeos para iniciar a análise." in at.warning[0].body
     # LOG: Teste de mensagem de status inicial concluído com sucesso.
 
 
@@ -90,7 +78,7 @@ def test_streamlit_analyze_button_initial_disabled_state():
     # INFO: Cria e executa a aplicação Streamlit.
     at = AppTest.from_file("src/main_streamlit.py", default_timeout=5)
     at.run()
-
+    
     # Acessa o botão pelo seu 'key' (definido em src/main_streamlit.py) e verifica
     # a propriedade 'disabled' do seu objeto 'proto' (o protobuffer subjacente do widget).
     assert at.button("analyze_button").proto.disabled is True
@@ -103,29 +91,38 @@ def test_streamlit_analyze_button_enabled_after_simulated_upload():
     após a simulação de upload de ambos os vídeos (Aluno e Mestre).
     """
     # INFO: Cria e executa a aplicação Streamlit.
-    at = AppTest.from_file(
-        "src/main_streamlit.py", default_timeout=10
-    )  # Aumenta o timeout para uploads
-    at.run()  # Roda o app inicialmente para que os widgets sejam renderizados
+    at = AppTest.from_file("src/main_streamlit.py", default_timeout=10) # Aumenta o timeout para uploads
+    at.run() # Roda o app inicialmente para que os widgets sejam renderizados
 
     # Simula o upload de arquivos para os `st.file_uploader`s.
-    # Acessamos o file_uploader diretamente pela sua 'key' através de `at.file_uploaders["key"]`.
-    # `io.BytesIO(b"...")` cria um objeto de arquivo em memória com dados binários de exemplo.
-    # O segundo argumento é o nome do arquivo, que é importante para o Streamlit.
-    at.file_uploaders[
-        "aluno_video_uploader"
-    ].set_value(  # <<--- MUDANÇA AQUI: at.file_uploaders["key"]
-        io.BytesIO(b"dummy_video_data_aluno_mp4"), "aluno.mp4"
-    )
-    at.file_uploaders[
-        "mestre_video_uploader"
-    ].set_value(  # <<--- MUDANÇA AQUI: at.file_uploaders["key"]
-        io.BytesIO(b"dummy_video_data_mestre_mp4"), "mestre.mp4"
-    )
+    # Usamos `at.get()` para obter UMA LISTA de widgets com a chave específica.
+    # Então, iteramos para encontrar o file_uploader e aplicar o set_value.
+    
+    # Loop para encontrar e setar o file_uploader do Aluno
+    found_aluno_uploader = False
+    for uploader in at.get("aluno_video_uploader"):
+        if uploader.widget_type == "file_uploader": # Verifica se é realmente um file_uploader
+            uploader.set_value(
+                io.BytesIO(b"dummy_video_data_aluno_mp4"), "aluno.mp4" 
+            )
+            found_aluno_uploader = True
+            break
+    assert found_aluno_uploader, "File uploader 'aluno_video_uploader' não encontrado ou não é do tipo correto."
 
+    # Loop para encontrar e setar o file_uploader do Mestre
+    found_mestre_uploader = False
+    for uploader in at.get("mestre_video_uploader"):
+        if uploader.widget_type == "file_uploader": # Verifica se é realmente um file_uploader
+            uploader.set_value(
+                io.BytesIO(b"dummy_video_data_mestre_mp4"), "mestre.mp4"
+            )
+            found_mestre_uploader = True
+            break
+    assert found_mestre_uploader, "File uploader 'mestre_video_uploader' não encontrado ou não é do tipo correto."
+    
     # INFO: Roda a aplicação novamente para que as mudanças de estado (uploads) sejam processadas
     # e a UI seja atualizada.
-    at.run()
+    at.run() 
 
     # Verifica se o botão "Analisar Movimentos" agora está habilitado.
     assert at.button("analyze_button").proto.disabled is False
@@ -140,65 +137,70 @@ def test_streamlit_analysis_flow_and_success_message(mocker):
     sem precisar processar vídeos reais, tornando o teste rápido.
     """
     # INFO: Cria e executa a aplicação Streamlit.
-    at = AppTest.from_file(
-        "src/main_streamlit.py", default_timeout=20
-    )  # Timeout maior para simulação de processo
+    at = AppTest.from_file("src/main_streamlit.py", default_timeout=20) # Timeout maior para simulação de processo
 
     # Mock do VideoAnalyzer: Substitui o método `analyze_video` do VideoAnalyzer
     # por uma função que retorna dados simulados. Isso evita que o teste
     # tente carregar e processar arquivos de vídeo reais, que seria lento.
     # `mock_frame` é um array NumPy que representa um frame de imagem simples.
-    mock_frame = (
-        np.zeros((100, 100, 3), dtype=np.uint8) + 128
-    )  # Um frame cinza simulado
+    mock_frame = np.zeros((100, 100, 3), dtype=np.uint8) + 128 # Um frame cinza simulado
     # `mock_landmarks` simula os dados de landmarks que seriam retornados.
-    mock_landmarks = [{"x": 0.5, "y": 0.5, "z": 0.0, "visibility": 1.0}]
+    mock_landmarks = [{'x': 0.5, 'y': 0.5, 'z': 0.0, 'visibility': 1.0}] 
 
     # Configura o mock: Quando `VideoAnalyzer.analyze_video` for chamado,
     # ele vai retornar um gerador que produz 5 pares de (mock_frame, mock_landmarks).
-    mocker.patch(
-        "src.video_analyzer.VideoAnalyzer.analyze_video",
-        return_value=[(mock_frame, mock_landmarks)] * 5,
-    )
+    mocker.patch('src.video_analyzer.VideoAnalyzer.analyze_video', 
+                 return_value=[(mock_frame, mock_landmarks)] * 5)
+    
+    at.run() # Roda o app inicialmente
 
-    at.run()  # Roda o app inicialmente
+    # Simula upload de arquivos para os `st.file_uploader`s.
+    # Usamos `at.get()` para obter UMA LISTA de widgets com a chave específica.
+    # Então, iteramos para encontrar o file_uploader e aplicar o set_value.
 
-    # Simula upload de arquivos (usando o método `at.file_uploaders["key"].set_value` correto)
-    at.file_uploaders[
-        "aluno_video_uploader"
-    ].set_value(  # <<--- MUDANÇA AQUI: at.file_uploaders["key"]
-        io.BytesIO(b"dummy_video_data_aluno_mp4"), "aluno.mp4"
-    )
-    at.file_uploaders[
-        "mestre_video_uploader"
-    ].set_value(  # <<--- MUDANÇA AQUI: at.file_uploaders["key"]
-        io.BytesIO(b"dummy_video_data_mestre_mp4"), "mestre.mp4"
-    )
+    # Loop para encontrar e setar o file_uploader do Aluno
+    found_aluno_uploader = False
+    for uploader in at.get("aluno_video_uploader"):
+        if uploader.widget_type == "file_uploader": # Verifica se é realmente um file_uploader
+            uploader.set_value(
+                io.BytesIO(b"dummy_video_data_aluno_mp4"), "aluno.mp4"
+            )
+            found_aluno_uploader = True
+            break
+    assert found_aluno_uploader, "File uploader 'aluno_video_uploader' não encontrado ou não é do tipo correto."
 
-    at.run()  # Atualiza UI após uploads para habilitar o botão de análise
-
+    # Loop para encontrar e setar o file_uploader do Mestre
+    found_mestre_uploader = False
+    for uploader in at.get("mestre_video_uploader"):
+        if uploader.widget_type == "file_uploader": # Verifica se é realmente um file_uploader
+            uploader.set_value(
+                io.BytesIO(b"dummy_video_data_mestre_mp4"), "mestre.mp4"
+            )
+            found_mestre_uploader = True
+            break
+    assert found_mestre_uploader, "File uploader 'mestre_video_uploader' não encontrado ou não é do tipo correto."
+    
+    at.run() # Atualiza UI após uploads para habilitar o botão de análise
+    
     # Simula clique no botão "Analisar Movimentos".
     # O método `.click()` já re-executa a aplicação Streamlit para processar o clique.
     at.button("analyze_button").click()
 
     # Verifica se a mensagem de "em progresso" aparece.
     # `at.info[0].body` acessa o corpo da primeira mensagem `st.info`.
-    assert (
-        "Iniciando a análise dos vídeos. Isso pode levar alguns minutos, por favor aguarde..."
-        in at.info[0].body
-    )
-
+    assert "Iniciando a análise dos vídeos. Isso pode levar alguns minutos, por favor aguarde..." in at.info[0].body
+    
     # Verifica a mensagem de sucesso final após a simulação de processamento.
     # `at.success[0].body` acessa o corpo da primeira mensagem `st.success`.
     assert "Ambos os vídeos processados! Exibindo resultados..." in at.success[0].body
-
+    
     # Verifica a mensagem final de conclusão. Pode ser um `st.text` ou outro `st.success`.
     # `at.text[-1].value` pega o texto do último elemento de texto.
-    assert "Análise de pose concluída! ✨" in at.text[-1].value
+    assert "Análise de pose concluída! ✨" in at.text[-1].value 
 
     # Verifica se as imagens processadas foram exibidas na UI.
     # Espera-se que pelo menos duas imagens (Aluno e Mestre) sejam renderizadas.
-    assert len(at.image) >= 2
+    assert len(at.image) >= 2 
 
     # Verifica se os sliders de frame foram criados e se o valor inicial é 0.
     assert at.slider("aluno_frame_slider").value == 0
