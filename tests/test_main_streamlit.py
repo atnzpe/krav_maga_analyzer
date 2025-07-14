@@ -95,30 +95,25 @@ def test_streamlit_analyze_button_enabled_after_simulated_upload():
     at.run() # Roda o app inicialmente para que os widgets sejam renderizados
 
     # Simula o upload de arquivos para os `st.file_uploader`s.
-    # Usamos `at.get()` para obter UMA LISTA de widgets com a chave específica.
-    # Então, iteramos para encontrar o file_uploader e aplicar o set_value.
+    # Acessamos os file_uploaders diretamente pela lista `at.main.file_uploaders`
+    # na ordem em que aparecem no script src/main_streamlit.py.
+    # ATENÇÃO: Esta abordagem depende da ordem de criação dos file_uploaders no seu código Streamlit.
+    # O primeiro file_uploader criado será `at.main.file_uploaders[0]`, o segundo `[1]`, e assim por diante.
     
-    # Loop para encontrar e setar o file_uploader do Aluno
-    found_aluno_uploader = False
-    for uploader in at.get("aluno_video_uploader"):
-        if uploader.widget_type == "file_uploader": # Verifica se é realmente um file_uploader
-            uploader.set_value(
-                io.BytesIO(b"dummy_video_data_aluno_mp4"), "aluno.mp4" 
-            )
-            found_aluno_uploader = True
-            break
-    assert found_aluno_uploader, "File uploader 'aluno_video_uploader' não encontrado ou não é do tipo correto."
+    # Certifique-se de que "aluno_video_uploader" é o primeiro st.file_uploader no seu main_streamlit.py
+    # e "mestre_video_uploader" é o segundo.
+    
+    # Simula o upload para o uploader do Aluno (geralmente o primeiro file_uploader na UI)
+    aluno_uploader = at.main.file_uploaders[0] # Acessa o primeiro file_uploader
+    aluno_uploader.set_value(
+        io.BytesIO(b"dummy_video_data_aluno_mp4"), "aluno.mp4" 
+    )
 
-    # Loop para encontrar e setar o file_uploader do Mestre
-    found_mestre_uploader = False
-    for uploader in at.get("mestre_video_uploader"):
-        if uploader.widget_type == "file_uploader": # Verifica se é realmente um file_uploader
-            uploader.set_value(
-                io.BytesIO(b"dummy_video_data_mestre_mp4"), "mestre.mp4"
-            )
-            found_mestre_uploader = True
-            break
-    assert found_mestre_uploader, "File uploader 'mestre_video_uploader' não encontrado ou não é do tipo correto."
+    # Simula o upload para o uploader do Mestre (geralmente o segundo file_uploader na UI)
+    mestre_uploader = at.main.file_uploaders[1] # Acessa o segundo file_uploader
+    mestre_uploader.set_value(
+        io.BytesIO(b"dummy_video_data_mestre_mp4"), "mestre.mp4"
+    )
     
     # INFO: Roda a aplicação novamente para que as mudanças de estado (uploads) sejam processadas
     # e a UI seja atualizada.
@@ -154,31 +149,22 @@ def test_streamlit_analysis_flow_and_success_message(mocker):
     
     at.run() # Roda o app inicialmente
 
-    # Simula upload de arquivos para os `st.file_uploader`s.
-    # Usamos `at.get()` para obter UMA LISTA de widgets com a chave específica.
-    # Então, iteramos para encontrar o file_uploader e aplicar o set_value.
+    # Simula o upload de arquivos para os `st.file_uploader`s.
+    # Acessamos os file_uploaders diretamente pela lista `at.main.file_uploaders`
+    # na ordem em que aparecem no script src/main_streamlit.py.
+    # ATENÇÃO: Esta abordagem depende da ordem de criação dos file_uploaders no seu código Streamlit.
+    
+    # Simula o upload para o uploader do Aluno (geralmente o primeiro file_uploader na UI)
+    aluno_uploader = at.main.file_uploaders[0] # Acessa o primeiro file_uploader
+    aluno_uploader.set_value(
+        io.BytesIO(b"dummy_video_data_aluno_mp4"), "aluno.mp4"
+    )
 
-    # Loop para encontrar e setar o file_uploader do Aluno
-    found_aluno_uploader = False
-    for uploader in at.get("aluno_video_uploader"):
-        if uploader.widget_type == "file_uploader": # Verifica se é realmente um file_uploader
-            uploader.set_value(
-                io.BytesIO(b"dummy_video_data_aluno_mp4"), "aluno.mp4"
-            )
-            found_aluno_uploader = True
-            break
-    assert found_aluno_uploader, "File uploader 'aluno_video_uploader' não encontrado ou não é do tipo correto."
-
-    # Loop para encontrar e setar o file_uploader do Mestre
-    found_mestre_uploader = False
-    for uploader in at.get("mestre_video_uploader"):
-        if uploader.widget_type == "file_uploader": # Verifica se é realmente um file_uploader
-            uploader.set_value(
-                io.BytesIO(b"dummy_video_data_mestre_mp4"), "mestre.mp4"
-            )
-            found_mestre_uploader = True
-            break
-    assert found_mestre_uploader, "File uploader 'mestre_video_uploader' não encontrado ou não é do tipo correto."
+    # Simula o upload para o uploader do Mestre (geralmente o segundo file_uploader na UI)
+    mestre_uploader = at.main.file_uploaders[1] # Acessa o segundo file_uploader
+    mestre_uploader.set_value(
+        io.BytesIO(b"dummy_video_data_mestre_mp4"), "mestre.mp4"
+    )
     
     at.run() # Atualiza UI após uploads para habilitar o botão de análise
     
@@ -194,7 +180,7 @@ def test_streamlit_analysis_flow_and_success_message(mocker):
     # `at.success[0].body` acessa o corpo da primeira mensagem `st.success`.
     assert "Ambos os vídeos processados! Exibindo resultados..." in at.success[0].body
     
-    # Verifica a mensagem final de conclusão. Pode ser um `st.text` ou outro `st.success`.
+    # Verifica se a mensagem final de conclusão. Pode ser um `st.text` ou outro `st.success`.
     # `at.text[-1].value` pega o texto do último elemento de texto.
     assert "Análise de pose concluída! ✨" in at.text[-1].value 
 
