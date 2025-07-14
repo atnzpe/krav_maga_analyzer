@@ -109,14 +109,17 @@ def test_streamlit_analyze_button_enabled_after_simulated_upload():
     at.run()  # Roda o app inicialmente para que os widgets sejam renderizados
 
     # Simula o upload de arquivos para os `st.file_uploader`s.
-    # Usamos `at.get()` para obter o widget pelo seu `key`.
-    # Acessamos o primeiro elemento da lista retornada (`[0]`) e chamamos `set_value` nele.
+    # Acessamos o file_uploader diretamente pela sua 'key' através de `at.file_uploaders["key"]`.
     # `io.BytesIO(b"...")` cria um objeto de arquivo em memória com dados binários de exemplo.
     # O segundo argumento é o nome do arquivo, que é importante para o Streamlit.
-    at.get("aluno_video_uploader")[0].set_value(  # <<--- MUDANÇA AQUI: Adicionado [0]
+    at.file_uploaders[
+        "aluno_video_uploader"
+    ].set_value(  # <<--- MUDANÇA AQUI: at.file_uploaders["key"]
         io.BytesIO(b"dummy_video_data_aluno_mp4"), "aluno.mp4"
     )
-    at.get("mestre_video_uploader")[0].set_value(  # <<--- MUDANÇA AQUI: Adicionado [0]
+    at.file_uploaders[
+        "mestre_video_uploader"
+    ].set_value(  # <<--- MUDANÇA AQUI: at.file_uploaders["key"]
         io.BytesIO(b"dummy_video_data_mestre_mp4"), "mestre.mp4"
     )
 
@@ -160,11 +163,15 @@ def test_streamlit_analysis_flow_and_success_message(mocker):
 
     at.run()  # Roda o app inicialmente
 
-    # Simula upload de arquivos (usando o método `at.get().set_value` correto)
-    at.get("aluno_video_uploader")[0].set_value(  # <<--- MUDANÇA AQUI: Adicionado [0]
+    # Simula upload de arquivos (usando o método `at.file_uploaders["key"].set_value` correto)
+    at.file_uploaders[
+        "aluno_video_uploader"
+    ].set_value(  # <<--- MUDANÇA AQUI: at.file_uploaders["key"]
         io.BytesIO(b"dummy_video_data_aluno_mp4"), "aluno.mp4"
     )
-    at.get("mestre_video_uploader")[0].set_value(  # <<--- MUDANÇA AQUI: Adicionado [0]
+    at.file_uploaders[
+        "mestre_video_uploader"
+    ].set_value(  # <<--- MUDANÇA AQUI: at.file_uploaders["key"]
         io.BytesIO(b"dummy_video_data_mestre_mp4"), "mestre.mp4"
     )
 
