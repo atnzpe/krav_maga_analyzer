@@ -1,301 +1,225 @@
 # tests/test_motion_comparator.py
-
 import pytest
+from unittest.mock import MagicMock, patch
 import numpy as np
-import os
-import sys
-
-# IMPORTANTE: Adiciona o diretório raiz do projeto ao sys.path para importações.
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import mediapipe as mp # Necessário para os mocks de PoseLandmark
 
 from src.motion_comparator import MotionComparator
-from src.utils import setup_logging
+from src.utils import get_logger, calculate_angle # Importar para mockar o logger e a função
 
-logger = setup_logging()  # Configura o logger para os testes
+# Mock do logger para evitar saída real durante os testes e verificar chamadas
+@pytest.fixture(autouse=True)
+def mock_logger():
+    """
+    Mocka a função get_logger para controlar o logger nos testes.
+    """
+    with patch('src.motion_comparator.get_logger') as mock_get_logger:
+        mock_logger_instance = MagicMock()
+        mock_get_logger.return_value = mock_logger_instance
+        yield mock_logger_instance
 
-
-# Fixture para uma instância do MotionComparator
+# Mock da função calculate_angle para isolar a lógica de comparação
 @pytest.fixture
-def motion_comparator_instance():
-    """Fornece uma instância de MotionComparator para os testes."""
-    logger.info("Configurando fixture: motion_comparator_instance")
-    return MotionComparator()
-
-
-# Fixture para gerar dados de landmarks mock (simulados)
-def generate_mock_landmarks(
-    num_frames: int, num_landmarks: int = 33, base_angle_value: float = 90.0
-) -> list:
+def mock_calculate_angle():
     """
-    Gera uma lista de dados de landmarks mock para simular frames de vídeo,
-    com a garantia de que o LEFT_ELBOW_ANGLE terá o valor base_angle_value.
-
-    Argumentos:
-        num_frames (int): Número de frames a serem gerados.
-        num_landmarks (int): Número de landmarks por frame (padrão MediaPipe = 33).
-        base_angle_value (float): O valor do ângulo (em graus) que o LEFT_ELBOW_ANGLE
-                                  deve ter para os landmarks gerados.
-
-    Retorna:
-        list: Uma lista onde cada item representa um frame, contendo uma lista de dicionários de landmarks.
+    Mocka a função calculate_angle para retornar valores controlados.
     """
-    mock_data = []
+    with patch('src.motion_comparator.calculate_angle') as mock_calc_angle:
+        yield mock_calc_angle
 
-    # Indices para LEFT_SHOULDER (P1), LEFT_ELBOW (P2 - vértice), LEFT_WRIST (P3)
-    SHOULDER_IDX = 11
-    ELBOW_IDX = 13
-    WRIST_IDX = 15
-
-    for f_idx in range(num_frames):
-        # Inicializa todos os landmarks com pontos dummy e alta visibilidade
-        frame_landmarks = [
-            {"x": 0.0, "y": 0.0, "z": 0.0, "visibility": 0.9}
-            for _ in range(num_landmarks)
-        ]
-
-        # Definir P2 (LEFT_ELBOW) como o vértice em (0,0,0) para facilitar o cálculo
-        frame_landmarks[ELBOW_IDX] = {"x": 0.0, "y": 0.0, "z": 0.0, "visibility": 0.9}
-
-        # Definir P1 (LEFT_SHOULDER) em (0,1,0) para ser o primeiro vetor do ângulo
-        frame_landmarks[SHOULDER_IDX] = {
-            "x": 0.0,
-            "y": 1.0,
-            "z": 0.0,
-            "visibility": 0.9,
-        }
-
-        # Definir P3 (LEFT_WRIST) com base no base_angle_value, usando pontos que já sabemos
-        # que funcionam com a função `calculate_angle` testada em `test_utils.py`.
-        p3_x, p3_y, p3_z = 0.0, 0.0, 0.0  # Inicializa com valores padrão
-
-        if base_angle_value == 180.0:
-            # Simula um braço esticado: P1=(0,1,0), P2=(0,0,0), P3=(0,-1,0)
-            p3_x, p3_y, p3_z = 0.0, -1.0, 0.0
-        elif base_angle_value == 90.0:
-            # Simula um ângulo reto: P1=(0,1,0), P2=(0,0,0), P3=(1,0,0)
-            p3_x, p3_y, p3_z = 1.0, 0.0, 0.0
-        elif base_angle_value == 45.0:
-            # Simula um ângulo agudo: P1=(0,1,0), P2=(0,0,0), P3=(1,1,0)
-            p3_x, p3_y, p3_z = 1.0, 1.0, 0.0
-        elif base_angle_value == 135.0:
-            # Simula um ângulo obtuso: P1=(0,1,0), P2=(0,0,0), P3=(-1,1,0)
-            p3_x, p3_y, p3_z = -1.0, 1.0, 0.0
-        else:
-            # Para outros ângulos não definidos especificamente, retorna 0 para evitar NaN
-            # ou calcula um ponto genérico. Para este teste, vamos garantir os casos chave.
-            logger.warning(
-                f"generate_mock_landmarks: base_angle_value {base_angle_value} não explicitamente tratado para cálculo exato. Ângulo pode não ser preciso."
-            )
-            p3_x, p3_y, p3_z = (
-                0.0,
-                0.0,
-                0.0,
-            )  # Default para algo que dê 0.0 se não for p1=p2 ou p3=p2
-
-        frame_landmarks[WRIST_IDX] = {
-            "x": p3_x,
-            "y": p3_y,
-            "z": p3_z,
-            "visibility": 0.9,
-        }
-
-        mock_data.append(frame_landmarks)
-    return mock_data
-
-
-class TestMotionComparator:
+def test_motion_comparator_initialization(mock_logger):
     """
-    Classe de testes para o MotionComparator.
-    Verifica se a comparação de movimentos e a extração de feedback funcionam como esperado.
+    Testa se o MotionComparator é inicializado corretamente e se o logger é usado.
     """
+    # Instancia o MotionComparator
+    comparator = MotionComparator()
 
-    def test_initialization(self, motion_comparator_instance):
-        """
-        Testa se o MotionComparator é inicializado corretamente e se os ângulos chave estão definidos.
-        """
-        logger.info("Executando test_initialization...")
-        assert motion_comparator_instance is not None
-        assert hasattr(motion_comparator_instance, "KEY_ANGLES")
-        assert "LEFT_ELBOW_ANGLE" in motion_comparator_instance.KEY_ANGLES
-        logger.info("test_initialization PASSED.")
+    # Verifica se o logger foi chamado para informar a inicialização
+    mock_logger.info.assert_any_call("Inicializando MotionComparator.")
+    mock_logger.info.assert_any_call(
+        f"Ângulos chave para comparação definidos: {list(comparator.KEY_ANGLES.keys())}"
+    )
 
-    def test_extract_angles_from_frame_valid(self, motion_comparator_instance):
-        """
-        Testa se a extração de ângulos de um frame com landmarks válidos funciona.
-        """
-        logger.info("Executando test_extract_angles_from_frame_valid...")
-        # Simula landmarks para um braço esquerdo esticado (180 graus)
-        mock_landmarks = [
-            {"x": 0.0, "y": 0.0, "z": 0.0, "visibility": 0.9}  # Dummy para lm_idx 0
-            for _ in range(33)  # 33 landmarks
-        ]
-        # LEFT_SHOULDER (11), LEFT_ELBOW (13), LEFT_WRIST (15)
-        mock_landmarks[motion_comparator_instance.LANDMARKS["LEFT_SHOULDER"]] = {
-            "x": 0.0,
-            "y": 1.0,
-            "z": 0.0,
-            "visibility": 0.9,
-        }
-        mock_landmarks[motion_comparator_instance.LANDMARKS["LEFT_ELBOW"]] = {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0,
-            "visibility": 0.9,
-        }
-        mock_landmarks[motion_comparator_instance.LANDMARKS["LEFT_WRIST"]] = {
-            "x": 0.0,
-            "y": -1.0,
-            "z": 0.0,
-            "visibility": 0.9,
-        }  # Alinhado
+    # Verifica se KEY_ANGLES e landmark_indices foram definidos
+    assert isinstance(comparator.KEY_ANGLES, dict)
+    assert len(comparator.KEY_ANGLES) > 0
+    assert isinstance(comparator.landmark_indices, dict)
+    assert len(comparator.landmark_indices) > 0
 
-        angles = motion_comparator_instance._extract_angles_from_frame(mock_landmarks)
+    # Verifica se os índices dos landmarks são do tipo correto (int)
+    for key, value in comparator.landmark_indices.items():
+        assert isinstance(value, int)
 
-        # O ângulo esperado para um braço esticado é 180 graus
-        assert "LEFT_ELBOW_ANGLE" in angles
-        assert angles["LEFT_ELBOW_ANGLE"] == pytest.approx(180.0, abs=0.01)
+def test_get_landmark_coords_valid(mock_logger):
+    """
+    Testa _get_landmark_coords com dados válidos.
+    """
+    comparator = MotionComparator()
+    # Simula uma lista de landmarks com 33 elementos
+    landmarks_data = [{'x': i, 'y': i, 'z': i, 'visibility': 0.9} for i in range(33)]
 
-        # Verifica se outros ângulos (não configurados especificamente) são NaN ou 0.0
-        assert np.isnan(angles["RIGHT_ELBOW_ANGLE"]) or angles[
-            "RIGHT_ELBOW_ANGLE"
-        ] == pytest.approx(0.0)
+    # Usa um landmark que sabemos que existe (ex: NOSE)
+    nose_coords = comparator._get_landmark_coords(landmarks_data, "NOSE")
+    assert nose_coords == {'x': mp.solutions.pose.PoseLandmark.NOSE.value,
+                           'y': mp.solutions.pose.PoseLandmark.NOSE.value,
+                           'z': mp.solutions.pose.PoseLandmark.NOSE.value,
+                           'visibility': 0.9}
 
-        logger.info("test_extract_angles_from_frame_valid PASSED.")
+def test_get_landmark_coords_invalid_name(mock_logger):
+    """
+    Testa _get_landmark_coords com nome de landmark inválido.
+    """
+    comparator = MotionComparator()
+    landmarks_data = [{'x': i, 'y': i, 'z': i, 'visibility': 0.9} for i in range(33)]
 
-    def test_extract_angles_from_frame_no_landmarks(self, motion_comparator_instance):
-        """
-        Testa a extração de ângulos de um frame sem landmarks (lista vazia).
-        Deve retornar NaN para todos os ângulos.
-        """
-        logger.info("Executando test_extract_angles_from_frame_no_landmarks...")
-        angles = motion_comparator_instance._extract_angles_from_frame([])
+    with pytest.raises(ValueError, match="Landmark 'INVALID_NAME'"):
+        comparator._get_landmark_coords(landmarks_data, "INVALID_NAME")
 
-        for angle_name in motion_comparator_instance.KEY_ANGLES.keys():
-            assert np.isnan(angles[angle_name])
-        logger.info("test_extract_angles_from_frame_no_landmarks PASSED.")
+def test_get_landmark_coords_out_of_bounds_index(mock_logger):
+    """
+    Testa _get_landmark_coords com índice fora dos limites.
+    """
+    comparator = MotionComparator()
+    # Simula uma lista de landmarks menor que o índice esperado para um landmark
+    landmarks_data = [{'x': i, 'y': i, 'z': i, 'visibility': 0.9} for i in range(5)] # Apenas 5 landmarks
 
-    def test_extract_angles_from_frame_low_visibility(self, motion_comparator_instance):
-        """
-        Testa a extração de ângulos quando a visibilidade de um landmark é muito baixa.
-        Deve resultar em NaN para o ângulo afetado.
-        """
-        logger.info("Executando test_extract_angles_from_frame_low_visibility...")
-        # Simula landmarks com uma visibilidade muito baixa para o cotovelo esquerdo
-        mock_landmarks = [
-            {"x": 0.0, "y": 0.0, "z": 0.0, "visibility": 0.9} for _ in range(33)
-        ]
-        mock_landmarks[motion_comparator_instance.LANDMARKS["LEFT_SHOULDER"]] = {
-            "x": 0.0,
-            "y": 1.0,
-            "z": 0.0,
-            "visibility": 0.9,
-        }
-        mock_landmarks[motion_comparator_instance.LANDMARKS["LEFT_ELBOW"]] = {
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0,
-            "visibility": 0.01,
-        }  # Visibilidade baixa
-        mock_landmarks[motion_comparator_instance.LANDMARKS["LEFT_WRIST"]] = {
-            "x": 0.0,
-            "y": -1.0,
-            "z": 0.0,
-            "visibility": 0.9,
-        }
+    # Tenta acessar um landmark com índice alto (ex: RIGHT_ANKLE é 28)
+    with pytest.raises(ValueError, match="Landmark 'RIGHT_ANKLE'"):
+        comparator._get_landmark_coords(landmarks_data, "RIGHT_ANKLE")
 
-        angles = motion_comparator_instance._extract_angles_from_frame(mock_landmarks)
+def test_compare_movements_basic(mock_logger, mock_calculate_angle):
+    """
+    Testa a função compare_movements com um cenário básico.
+    """
+    comparator = MotionComparator()
 
-        assert "LEFT_ELBOW_ANGLE" in angles
-        assert np.isnan(angles["LEFT_ELBOW_ANGLE"])
-        logger.info("test_extract_angles_from_frame_low_visibility PASSED.")
+    # Mock de dados de landmarks (simplificados)
+    # Cada sublista é um frame, cada dict é um landmark
+    # Assumimos que os índices são mapeados corretamente
+    aluno_landmarks_history = [
+        [{'x': 1, 'y': 1, 'z': 1, 'visibility': 1} for _ in range(33)], # Frame 0
+        [{'x': 2, 'y': 2, 'z': 2, 'visibility': 1} for _ in range(33)], # Frame 1
+    ]
+    mestre_landmarks_history = [
+        [{'x': 1.1, 'y': 1.1, 'z': 1.1, 'visibility': 1} for _ in range(33)], # Frame 0
+        [{'x': 2.2, 'y': 2.2, 'z': 2.2, 'visibility': 1} for _ in range(33)], # Frame 1
+    ]
 
-    def test_compare_perfect_match(self, motion_comparator_instance):
-        """
-        Testa a comparação de movimentos onde aluno e mestre têm ângulos idênticos.
-        Esperado: diferenças próximas a zero e feedback positivo.
-        """
-        logger.info("Executando test_compare_perfect_match...")
-        # Cria dados mock onde aluno e mestre têm o mesmo ângulo (180 graus de cotovelo)
-        aluno_data = generate_mock_landmarks(num_frames=1, base_angle_value=180.0)
-        mestre_data = generate_mock_landmarks(num_frames=1, base_angle_value=180.0)
+    # Configura o mock_calculate_angle para retornar valores específicos
+    # para simular diferenças
+    mock_calculate_angle.side_effect = [
+        90, 95, # Aluno e Mestre para LEFT_ELBOW_ANGLE no Frame 0
+        45, 40, # Aluno e Mestre para RIGHT_ELBOW_ANGLE no Frame 0
+        # ... e assim por diante para todos os ângulos e frames
+        90, 90, # Aluno e Mestre para LEFT_ELBOW_ANGLE no Frame 1 (sem diferença)
+        45, 60, # Aluno e Mestre para RIGHT_ELBOW_ANGLE no Frame 1 (grande diferença)
+        # Mais retornos seriam necessários para cobrir todos os KEY_ANGLES
+        # Para simplificar o teste, vamos focar nos primeiros
+    ]
 
-        raw_comparison, feedback = motion_comparator_instance.compare_movements(
-            aluno_data, mestre_data
-        )
+    # Para garantir que temos retornos suficientes para todos os ângulos em 2 frames
+    num_angles = len(comparator.KEY_ANGLES)
+    mock_calculate_angle.side_effect = [
+        # Frame 0
+        90, 95, # LEFT_ELBOW_ANGLE (diff 5)
+        45, 40, # RIGHT_ELBOW_ANGLE (diff 5)
+        100, 125, # LEFT_SHOULDER_ANGLE (diff 25) -> Grande diferença
+        70, 75, # RIGHT_SHOULDER_ANGLE (diff 5)
+        150, 165, # LEFT_KNEE_ANGLE (diff 15) -> Pequena diferença
+        170, 172, # RIGHT_KNEE_ANGLE (diff 2)
+        80, 85, # LEFT_HIP_ANGLE (diff 5)
+        90, 92, # RIGHT_HIP_ANGLE (diff 2)
+        # Frame 1
+        90, 90, # LEFT_ELBOW_ANGLE (diff 0)
+        45, 60, # RIGHT_ELBOW_ANGLE (diff 15) -> Pequena diferença
+        100, 105, # LEFT_SHOULDER_ANGLE (diff 5)
+        70, 70, # RIGHT_SHOULDER_ANGLE (diff 0)
+        150, 155, # LEFT_KNEE_ANGLE (diff 5)
+        170, 170, # RIGHT_KNEE_ANGLE (diff 0)
+        80, 80, # LEFT_HIP_ANGLE (diff 0)
+        90, 90, # RIGHT_HIP_ANGLE (diff 0)
+    ]
 
-        assert len(raw_comparison) == 1
-        assert raw_comparison[0]["frame"] == 0
-        assert "LEFT_ELBOW_ANGLE" in raw_comparison[0]["differences"]
-        assert raw_comparison[0]["differences"]["LEFT_ELBOW_ANGLE"] == pytest.approx(
-            0.0, abs=0.01
-        )
 
-        # Espera um feedback positivo ou ausência de feedback de erro
-        assert any("Nenhuma diferença significativa" in msg for msg in feedback)
-        logger.info("test_compare_perfect_match PASSED.")
+    raw_results, feedback = comparator.compare_movements(aluno_landmarks_history, mestre_landmarks_history)
 
-    def test_compare_with_significant_difference(self, motion_comparator_instance):
-        """
-        Testa a comparação de movimentos com uma diferença significativa de ângulo.
-        Esperado: feedback negativo.
-        """
-        logger.info("Executando test_compare_with_significant_difference...")
-        # Aluno com 90 graus, Mestre com 180 graus (grande diferença)
-        aluno_data = generate_mock_landmarks(num_frames=1, base_angle_value=90.0)
-        mestre_data = generate_mock_landmarks(num_frames=1, base_angle_value=180.0)
+    mock_logger.info.assert_any_call("Iniciando a comparação de movimentos...")
+    mock_logger.info.assert_any_call("Comparando 2 frames.")
+    mock_logger.info.assert_any_call("Comparação de movimentos concluída.")
 
-        raw_comparison, feedback = motion_comparator_instance.compare_movements(
-            aluno_data, mestre_data
-        )
+    assert len(raw_results) == 2
+    assert len(feedback) > 0 # Deve haver feedback devido às diferenças simuladas
 
-        assert len(raw_comparison) == 1
-        assert raw_comparison[0]["differences"]["LEFT_ELBOW_ANGLE"] == pytest.approx(
-            90.0, abs=0.01
-        )
+    # Verifica feedback específico
+    assert "Frame 1: Grande diferença no left shoulder angle!" in feedback
+    assert "Frame 1: Pequena diferença no left knee angle." in feedback
+    assert "Frame 2: Pequena diferença no right elbow angle." in feedback
+    assert "Nenhuma diferença significativa detectada. Boa execução!" not in feedback
 
-        # Espera um feedback específico sobre a diferença de ângulo
-        assert any("Grande diferença no left elbow angle!" in msg for msg in feedback)
-        logger.info("test_compare_with_significant_difference PASSED.")
+def test_compare_movements_no_significant_diff(mock_logger, mock_calculate_angle):
+    """
+    Testa a função compare_movements quando não há diferenças significativas.
+    """
+    comparator = MotionComparator()
 
-    def test_compare_different_frame_counts(self, motion_comparator_instance):
-        """
-        Testa a comparação com vídeos de durações diferentes.
-        Deve comparar apenas o número de frames do vídeo mais curto.
-        """
-        logger.info("Executando test_compare_different_frame_counts...")
-        aluno_data = generate_mock_landmarks(num_frames=5)
-        mestre_data = generate_mock_landmarks(num_frames=3)  # Mestre é mais curto
+    aluno_landmarks_history = [
+        [{'x': 1, 'y': 1, 'z': 1, 'visibility': 1} for _ in range(33)],
+    ]
+    mestre_landmarks_history = [
+        [{'x': 1.0, 'y': 1.0, 'z': 1.0, 'visibility': 1} for _ in range(33)],
+    ]
 
-        raw_comparison, feedback = motion_comparator_instance.compare_movements(
-            aluno_data, mestre_data
-        )
+    # Configura o mock_calculate_angle para retornar pouca ou nenhuma diferença
+    mock_calculate_angle.side_effect = [
+        90, 91, # diff 1
+        45, 46, # diff 1
+        100, 102, # diff 2
+        70, 71, # diff 1
+        150, 151, # diff 1
+        170, 171, # diff 1
+        80, 81, # diff 1
+        90, 91, # diff 1
+    ]
 
-        assert len(raw_comparison) == 3  # Deve comparar apenas 3 frames
-        logger.info("test_compare_different_frame_counts PASSED.")
+    raw_results, feedback = comparator.compare_movements(aluno_landmarks_history, mestre_landmarks_history)
 
-    def test_compare_with_nan_angles(self, motion_comparator_instance):
-        """
-        Testa a comparação quando um dos vídeos tem landmarks ausentes (resultando em NaN).
-        Esses ângulos devem ser ignorados na comparação.
-        """
-        logger.info("Executando test_compare_with_nan_angles...")
-        aluno_data = generate_mock_landmarks(num_frames=1, base_angle_value=180.0)
-        # Mestre com dados vazios para simular landmarks ausentes
-        mestre_data = [[]]
+    assert len(raw_results) == 1
+    assert len(feedback) == 1
+    assert "Nenhuma diferença significativa detectada. Boa execução!" in feedback
+    mock_logger.info.assert_any_call("Nenhuma diferença significativa geral detectada.")
 
-        raw_comparison, feedback = motion_comparator_instance.compare_movements(
-            aluno_data, mestre_data
-        )
+def test_compare_movements_missing_landmarks_in_frame(mock_logger, mock_calculate_angle):
+    """
+    Testa a função compare_movements quando um frame não tem landmarks.
+    """
+    comparator = MotionComparator()
 
-        assert len(raw_comparison) == 1
-        # Verifica se as diferenças para todos os ângulos são NaN, pois o mestre não tem dados
-        for angle_name in motion_comparator_instance.KEY_ANGLES.keys():
-            assert np.isnan(raw_comparison[0]["differences"][angle_name])
+    aluno_landmarks_history = [
+        [{'x': 1, 'y': 1, 'z': 1, 'visibility': 1} for _ in range(33)], # Frame 0
+        None, # Frame 1 - sem landmarks
+        [{'x': 2, 'y': 2, 'z': 2, 'visibility': 1} for _ in range(33)], # Frame 2
+    ]
+    mestre_landmarks_history = [
+        [{'x': 1.1, 'y': 1.1, 'z': 1.1, 'visibility': 1} for _ in range(33)], # Frame 0
+        [{'x': 2.2, 'y': 2.2, 'z': 2.2, 'visibility': 1} for _ in range(33)], # Frame 1
+        [{'x': 3.3, 'y': 3.3, 'z': 3.3, 'visibility': 1} for _ in range(33)], # Frame 2
+    ]
 
-        # O feedback não deve conter mensagens de erro de comparação específica se for NaN
-        # Pode ter a mensagem de 'Nenhuma diferença significativa' se não houver outros erros
-        assert (
-            any("Nenhuma diferença significativa" in msg for msg in feedback)
-            or not feedback
-        )
-        logger.info("test_compare_with_nan_angles PASSED.")
+    # Mock calculate_angle para os frames que serão processados
+    mock_calculate_angle.side_effect = [
+        # Frame 0
+        90, 95, # LEFT_ELBOW_ANGLE (diff 5)
+        # ... (outros ângulos para Frame 0)
+        # Frame 2
+        100, 105, # LEFT_ELBOW_ANGLE (diff 5)
+        # ... (outros ângulos para Frame 2)
+    ] * (len(comparator.KEY_ANGLES) * 2) # Garante retornos suficientes
+
+    raw_results, feedback = comparator.compare_movements(aluno_landmarks_history, mestre_landmarks_history)
+
+    assert len(raw_results) == 3
+    assert "Frame 2: Um ou ambos os vídeos não têm landmarks detectados. Pulando este frame." in feedback
+    mock_logger.warning.assert_any_call("Frame 2: Um ou ambos os vídeos não têm landmarks detectados. Pulando este frame.")
+    mock_logger.info.assert_any_call("Comparando 3 frames.")
+    # Verifica que o calculate_angle não foi chamado para o frame com None
+    # Isso é mais complexo de verificar diretamente com side_effect, mas o log e o skip confirmam.

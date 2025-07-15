@@ -2,9 +2,16 @@
 
 import logging
 import numpy as np
-from src.utils import setup_logging, calculate_angle  # Importa as funções utilitárias
+import mediapipe as mp  # Importado para usar mp.solutions.pose.PoseLandmark
+from src.utils import (
+    get_logger,
+    calculate_angle,
+)  # Importa get_logger e calculate_angle
 
-logger = setup_logging()  # Inicializa o logger para este módulo
+# Inicializa o logger para este módulo.
+# Usar get_logger(__name__) garante que o logger é configurado corretamente
+# e que as mensagens de log incluem o nome do módulo.
+logger = get_logger(__name__)
 
 
 class MotionComparator:
@@ -25,7 +32,7 @@ class MotionComparator:
         logger.info("Inicializando MotionComparator.")
 
         # Dicionário que mapeia nomes de partes do corpo para os índices dos landmarks do MediaPipe.
-        # Os nomes dos landmarks são definidos pelo MediaPipe (ex: mp_pose.PoseLandmark.LEFT_SHOULDER.value)
+        # Os nomes dos landmarks são definidos pelo MediaPipe (ex: mp.solutions.pose.PoseLandmark.LEFT_SHOULDER.value)
         # É crucial usar os índices corretos conforme a documentação do MediaPipe.
         # Estes são os índices numéricos das 33 landmarks do MediaPipe.
         # Para facilitar a leitura, usamos os nomes das enumerações do MediaPipe, mas ao usar
@@ -46,27 +53,8 @@ class MotionComparator:
         }
 
         # Mapeamento de nomes de landmarks para índices (para facilitar o acesso na lista `landmarks_data`)
-        # Esta é uma representação simplificada. No MediaPipe, você usaria mp_pose.PoseLandmark. para obter os valores.
-        # Para este contexto, assumimos que landmarks_data é uma lista de dicionários
-        # e que a ordem ou o nome são consistentes com a saída do MediaPipe.
-        # É fundamental que o `landmarks_data` vindo do `PoseEstimator` seja indexado corretamente.
-        # A lista de dicionários `landmarks_list` em `PoseEstimator.process_frame` já é linear e indexável.
-        # Então, esta parte do código precisa de um mapeamento correto dos nomes simbólicos
-        # para os índices reais da lista de landmarks.
-        # Exemplo de como obter os índices corretos se 'landmarks_data' é uma lista com 33 elementos:
-        # import mediapipe as mp
-        # LEFT_SHOULDER_IDX = mp.solutions.pose.PoseLandmark.LEFT_SHOULDER.value
-        # ... e assim por diante para cada um dos 33 landmarks.
-        # Para simplificar aqui, vamos assumir que `landmarks_data` é uma lista de dicionários
-        # onde cada dicionário já tem os valores x,y,z,visibility dos landmarks em uma ordem previsível
-        # ou que você terá um mapeamento mais robusto.
-        # Para os fins deste exemplo e para o uso com o PoseEstimator, onde landmarks_list
-        # é uma lista em ordem, podemos usar os índices numéricos.
-
         # Importa PoseLandmark para mapear nomes para índices.
         # Isso garante que estamos usando os índices corretos do MediaPipe.
-        import mediapipe as mp
-
         self.landmark_indices = {
             "NOSE": mp.solutions.pose.PoseLandmark.NOSE.value,
             "LEFT_SHOULDER": mp.solutions.pose.PoseLandmark.LEFT_SHOULDER.value,
@@ -102,7 +90,8 @@ class MotionComparator:
         """
         idx = self.landmark_indices.get(name)
         if idx is None or idx >= len(landmarks_data):
-            # Isso pode acontecer se a detecção de pose falhar completamente em um frame.
+            # Isso pode acontecer se a detecção de pose falhar completamente em um frame
+            # ou se o landmark específico não for detectado.
             # Retorna um dicionário com valores padrao ou lança um erro, dependendo da robustez desejada.
             # Para comparação, retornar None ou um dict inválido levará a erros, então é melhor levantar.
             raise ValueError(
@@ -120,7 +109,7 @@ class MotionComparator:
 
         Args:
             aluno_landmarks_history (list[list]): Lista de listas de landmarks do aluno,
-                                                 onde cada sublista representa um frame.
+                                                    onde cada sublista representa um frame.
             mestre_landmarks_history (list[list]): Lista de listas de landmarks do mestre.
 
         Returns:
@@ -142,6 +131,16 @@ class MotionComparator:
 
             frame_comparison = {"frame": i + 1, "angles_diff": {}}
             frame_feedback = []
+
+            # Verifica se os landmarks para o frame atual são válidos (não None)
+            if aluno_frame_landmarks is None or mestre_frame_landmarks is None:
+                err_msg = f"Frame {i+1}: Um ou ambos os vídeos não têm landmarks detectados. Pulando este frame."
+                frame_feedback.append(err_msg)
+                logger.warning(err_msg)
+                lista_comparacao_raw.append(
+                    frame_comparison
+                )  # Adiciona o frame, mesmo que vazio
+                continue  # Pula para o próximo frame
 
             for angle_name, (p1_name, p2_name, p3_name) in self.KEY_ANGLES.items():
                 try:
