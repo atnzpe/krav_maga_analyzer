@@ -33,6 +33,12 @@ logger = (
     setup_logging()
 )  # Inicializa o logger da aplicação, configurado para registrar informações e erros.
 
+# Gerenciador de feedback para exibir mensagens na UI
+feedback_manager = FeedbackManager()
+
+# Instância da página Flet (será definida na função main)
+page_instance = None
+
 # Variáveis globais (ou de sessão) para armazenar os caminhos dos arquivos e dados processados.
 # Estas variáveis são acessíveis e modificáveis por qualquer função dentro do módulo.
 # Alterado para armazenar o conteúdo do vídeo como BytesIO, não o caminho.
@@ -182,47 +188,64 @@ def set_ui_analysis_state(is_analyzing: bool):
 
 async def pick_file_result_aluno(e: ft.FilePickerResultEvent):
     """
-    Callback para quando um arquivo de vídeo do aluno é selecionado via FilePicker.
-    Lê o conteúdo do arquivo e armazena em VIDEO_ALUNO_CONTENT.
+    Manipula o resultado da seleção de arquivo para o vídeo do aluno.
+
+    Args:
+        e (ft.FilePickerResultEvent): Evento de resultado do seletor de arquivos.
     """
-    global VIDEO_ALUNO_CONTENT
+    global page_instance
     if e.files:
         selected_file = e.files[0]
+        logger.info(f"Arquivo do aluno selecionado: {selected_file.name}")
+        feedback_manager.update_feedback(page_instance, f"Carregando vídeo do aluno: {selected_file.name}...")
         try:
-            # Leia o conteúdo do arquivo como bytes
-            file_bytes = await page_instance.run_task(lambda: open(selected_file.path, 'rb').read())
-            
-            VIDEO_ALUNO_CONTENT = io.BytesIO(file_bytes)
-            logger.info(f"Vídeo do Aluno selecionado: {selected_file.name}")
-            upload_button_aluno.text = f"Vídeo do Aluno: {selected_file.name}"
-            clear_ui_and_analysis_data()  # Limpa dados anteriores ao carregar um novo vídeo
-            update_analyze_button_state()
+            # Usa asyncio.to_thread para executar a leitura do arquivo (operação bloqueante)
+            # em um thread separado, evitando que a UI congele.
+            # page_instance.run_task() espera uma coroutine, e asyncio.to_thread retorna uma.
+            file_bytes = await page_instance.run_task(lambda: asyncio.to_thread(lambda: open(selected_file.path, 'rb').read()))
+            logger.info("Vídeo do aluno lido com sucesso.")
+            feedback_manager.update_feedback(page_instance, "Vídeo do aluno carregado com sucesso!")
+            # Aqui você pode processar 'file_bytes'
+            # Exemplo: Salvar temporariamente ou passar para o processador de vídeo
+            # video_processor.load_video_aluno(file_bytes) # Exemplo de uso
         except Exception as ex:
-            logger.error(f"Erro ao ler vídeo do aluno: {ex}", exc_info=True)
-            update_feedback(f"Erro ao carregar vídeo do aluno: {ex}", is_error=True)
-    page_instance.update()
-
+            logger.error(f"Erro ao ler vídeo do aluno: {ex}")
+            feedback_manager.update_feedback(page_instance, f"Erro ao carregar vídeo do aluno: '{ex}'")
+    else:
+        logger.info("Seleção de arquivo do aluno cancelada.")
+        feedback_manager.update_feedback(page_instance, "Seleção de vídeo do aluno cancelada.")
+    page_instance.update() # Atualiza a página para exibir o feedback
 
 async def pick_file_result_mestre(e: ft.FilePickerResultEvent):
     """
-    Callback para quando um arquivo de vídeo do mestre é selecionado via FilePicker.
-    Lê o conteúdo do arquivo e armazena em VIDEO_MESTRE_CONTENT.
+    Manipula o resultado da seleção de arquivo para o vídeo do mestre.
+
+    Args:
+        e (ft.FilePickerResultEvent): Evento de resultado do seletor de arquivos.
     """
-    global VIDEO_MESTRE_CONTENT
+    global page_instance
     if e.files:
         selected_file = e.files[0]
+        logger.info(f"Arquivo do mestre selecionado: {selected_file.name}")
+        feedback_manager.update_feedback(page_instance, f"Carregando vídeo do mestre: {selected_file.name}...")
         try:
-            # Leia o conteúdo do arquivo como bytes
-            file_bytes = await page_instance.run_task(lambda: open(selected_file.path, 'rb').read())
-            VIDEO_MESTRE_CONTENT = io.BytesIO(file_bytes)
-            logger.info(f"Vídeo do Mestre selecionado: {selected_file.name}")
-            upload_button_mestre.text = f"Vídeo do Mestre: {selected_file.name}"
-            clear_ui_and_analysis_data()  # Limpa dados anteriores ao carregar um novo vídeo
-            update_analyze_button_state()
+            # Usa asyncio.to_thread para executar a leitura do arquivo (operação bloqueante)
+            # em um thread separado, evitando que a UI congele.
+            # page_instance.run_task() espera uma coroutine, e asyncio.to_thread retorna uma.
+            file_bytes = await page_instance.run_task(lambda: asyncio.to_thread(lambda: open(selected_file.path, 'rb').read()))
+            logger.info("Vídeo do mestre lido com sucesso.")
+            feedback_manager.update_feedback(page_instance, "Vídeo do mestre carregado com sucesso!")
+            # Aqui você pode processar 'file_bytes'
+            # Exemplo: Salvar temporariamente ou passar para o processador de vídeo
+            # video_processor.load_video_mestre(file_bytes) # Exemplo de uso
         except Exception as ex:
-            logger.error(f"Erro ao ler vídeo do mestre: {ex}", exc_info=True)
-            update_feedback(f"Erro ao carregar vídeo do mestre: {ex}", is_error=True)
-    page_instance.update()
+            logger.error(f"Erro ao ler vídeo do mestre: {ex}")
+            feedback_manager.update_feedback(page_instance, f"Erro ao carregar vídeo do mestre: '{ex}'")
+    else:
+        logger.info("Seleção de arquivo do mestre cancelada.")
+        feedback_manager.update_feedback(page_instance, "Seleção de vídeo do mestre cancelada.")
+    page_instance.update() # Atualiza a página para exibir o feedback
+
 
 
 async def play_video(player_type: str):
