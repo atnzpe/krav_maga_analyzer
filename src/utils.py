@@ -1,58 +1,85 @@
 # src/utils.py
 
 import logging
-import os
-import sys  # Importado para a configuração do StreamHandler
-import numpy as np  # Importa a biblioteca NumPy para operações matemáticas com arrays
+import flet as ft # Importar flet é necessário para a classe FeedbackManager
 
-
+# Configuração básica do logger
 def setup_logging():
     """
-    Configura o sistema de logging para a aplicação.
-    Cria um diretório 'logs' se não existir e configura o logger
-    para gravar em 'app.log' e exibir no console.
-
-    Esta função garante que todas as mensagens importantes do sistema
-    sejam registradas para depuração e monitoramento, seguindo as melhores práticas.
+    Configura o sistema de logging para a aplicação, definindo o formato
+    e o nível de saída para INFO.
     """
-    log_dir = "logs"  # Define o nome do diretório para os logs
-    if not os.path.exists(log_dir):  # Verifica se o diretório de logs existe
-        os.makedirs(log_dir)  # Se não existir, cria o diretório
-
-    log_file_path = os.path.join(
-        log_dir, "app.log"
-    )  # Define o caminho completo do arquivo de log
-
-    # Remove handlers existentes para evitar duplicação em re-configurações.
-    # Isso é importante em ambientes como Streamlit ou Flet onde a função pode ser chamada
-    # múltiplas vezes durante o ciclo de vida da aplicação.
-    for handler in logging.root.handlers[:]:
-        logging.root.removeHandler(handler)
-
-    # Configura a base do sistema de logging
     logging.basicConfig(
-        level=logging.INFO,  # Define o nível mínimo de log a ser registrado
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",  # Formato das mensagens de log.
-        handlers=[
-            logging.FileHandler(
-                log_file_path
-            ),  # Handler para gravar logs em um arquivo.
-            logging.StreamHandler(
-                sys.stdout
-            ),  # Handler para exibir logs no console (saída padrão).
-        ],
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
     )
-    # Configura o nível de logging para o módulo 'flet' para WARNING ou ERROR
-    # para evitar logs muito verbosos do framework que podem poluir o console.
-    logging.getLogger("flet").setLevel(logging.WARNING)
-    logging.getLogger("httpx").setLevel(
-        logging.WARNING
-    )  # Para requests HTTP de flet/streamlit, que também podem ser verbosos.
+    logging.info("Configuração de logging inicializada.")
 
-    # Retorna um logger específico para o módulo que o chamou (__name__).
-    # Isso permite que as mensagens de log incluam o nome do módulo de origem.
-    return logging.getLogger(__name__)
+def get_logger(name: str):
+    """
+    Retorna uma instância de logger com o nome especificado.
 
+    Args:
+        name (str): O nome do logger (geralmente __name__ do módulo).
+
+    Returns:
+        logging.Logger: A instância do logger.
+    """
+    return logging.getLogger(name)
+
+class FeedbackManager:
+    """
+    Gerencia a exibição de feedback e mensagens de status na interface do usuário (UI).
+    Usa um controle `ft.Text` para exibir mensagens, atualizando-o conforme necessário.
+    """
+
+    def __init__(self, feedback_text_control: ft.Text = None):
+        """
+        Inicializa o FeedbackManager.
+
+        Args:
+            feedback_text_control (ft.Text): O controle ft.Text onde as mensagens serão exibidas.
+                                             Se não for fornecido, um novo ft.Text será criado.
+        """
+        if feedback_text_control is None:
+            # Cria um controle ft.Text padrão se nenhum for fornecido
+            self.feedback_text_control = ft.Text(
+                value="Aguardando ações...",
+                color=ft.colors.BLACK,
+                size=16,
+                weight=ft.FontWeight.NORMAL,
+                text_align=ft.TextAlign.CENTER,
+            )
+        else:
+            self.feedback_text_control = feedback_text_control
+        get_logger(__name__).info("FeedbackManager inicializado.") # Usando get_logger aqui
+
+    def set_feedback_control(self, control: ft.Text):
+        """
+        Define ou atualiza o controle ft.Text que será usado para exibir o feedback.
+        Isso permite que o controle seja criado na função `main` do Flet e depois
+        passado para o FeedbackManager.
+        """
+        self.feedback_text_control = control
+        get_logger(__name__).info("Controle de feedback na UI atualizado no FeedbackManager.")
+
+    def update_feedback(self, page: ft.Page, message: str, is_error: bool = False):
+        """
+        Atualiza o texto de feedback na UI e a página.
+
+        Args:
+            page (ft.Page): A instância da página Flet para atualização.
+            message (str): A mensagem a ser exibida.
+            is_error (bool): Se `True`, a mensagem será formatada como um erro.
+        """
+        get_logger(__name__).info(f"Atualizando feedback: {message} (Erro: {is_error})")
+        self.feedback_text_control.value = message
+        self.feedback_text_control.color = ft.colors.RED if is_error else ft.colors.BLACK
+        page.update() # Atualiza a página para refletir a mudança.
+        get_logger(__name__).debug("Página da UI atualizada com novo feedback.")
+
+# Outras classes ou funções utilitárias podem vir aqui
 
 def calculate_angle(p1: dict, p2: dict, p3: dict) -> float:
     """
