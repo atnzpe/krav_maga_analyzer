@@ -189,7 +189,8 @@ async def pick_file_result_aluno(e: ft.FilePickerResultEvent):
         selected_file = e.files[0]
         try:
             # Leia o conteúdo do arquivo como bytes
-            file_bytes = await page_instance.run_thread_task(selected_file.read_bytes)
+            file_bytes = await page_instance.run_task(lambda: open(selected_file.path, 'rb').read())
+            
             VIDEO_ALUNO_CONTENT = io.BytesIO(file_bytes)
             logger.info(f"Vídeo do Aluno selecionado: {selected_file.name}")
             upload_button_aluno.text = f"Vídeo do Aluno: {selected_file.name}"
@@ -211,7 +212,7 @@ async def pick_file_result_mestre(e: ft.FilePickerResultEvent):
         selected_file = e.files[0]
         try:
             # Leia o conteúdo do arquivo como bytes
-            file_bytes = await page_instance.run_thread_task(selected_file.read_bytes)
+            file_bytes = await page_instance.run_task(lambda: open(selected_file.path, 'rb').read())
             VIDEO_MESTRE_CONTENT = io.BytesIO(file_bytes)
             logger.info(f"Vídeo do Mestre selecionado: {selected_file.name}")
             upload_button_mestre.text = f"Vídeo do Mestre: {selected_file.name}"
