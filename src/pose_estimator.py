@@ -1,90 +1,111 @@
+# src/pose_estimator.py
+
 import mediapipe as mp
 import cv2
 import numpy as np
-import logging
-from src.utils import setup_logging
+from src.utils import get_logger  # Importa get_logger do seu módulo de utilidades
 
-logger = setup_logging()
+# Inicializa o logger para este módulo
+logger = get_logger(__name__)
+
 
 class PoseEstimator:
     """
-    Gerencia a detecção de pose usando MediaPipe.
+    Classe responsável por estimar a pose de indivíduos em frames de vídeo
+    usando a solução MediaPipe Pose.
     """
+
     def __init__(self):
         """
-        Inicializa o modelo de pose do MediaPipe.
+        Inicializa o PoseEstimator, configurando o modelo MediaPipe Pose
+        e as utilidades de desenho.
         """
         logger.info("Inicializando PoseEstimator com MediaPipe Pose...")
-        self.mp_pose = mp.solutions.pose
-        # Inicializa o objeto Pose com configurações otimizadas para detecção em vídeo.
-        self.pose = self.mp_pose.Pose(
-            static_image_mode=False, # Define como False para processar streams de vídeo de forma mais eficiente.
-            model_complexity=1,      # 0, 1, ou 2. 1 é um bom equilíbrio entre performance e precisão.
-            enable_segmentation=False, # Não precisamos de segmentação de fundo por enquanto, economiza recursos.
-            min_detection_confidence=0.5, # Limiar de confiança para detecção inicial da pose.
-            min_tracking_confidence=0.5   # Limiar de confiança para rastrear a pose após a detecção.
-        )
-        self.mp_drawing = mp.solutions.drawing_utils # Utilitários para desenhar landmarks.
-        self.mp_drawing_styles = mp.solutions.drawing_styles # Estilos de desenho padrão.
-        logger.info("PoseEstimator inicializado.")
 
-    def process_frame(self, frame: np.ndarray) -> tuple[np.ndarray, list]:
+        # Inicializa o modelo MediaPipe Pose.
+        # static_image_mode=False: para processar vídeo.
+        # model_complexity=1: complexidade do modelo (0, 1, 2). 1 é um bom equilíbrio.
+        # min_detection_confidence: confiança mínima para detecção de pose.
+        # min_tracking_confidence: confiança mínima para rastreamento de pose.
+        self.pose = mp.solutions.pose.Pose(
+            static_image_mode=False,
+            model_complexity=1,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5,
+        )
+        logger.info("Modelo MediaPipe Pose inicializado.")
+
+        # Inicializa as utilidades de desenho do MediaPipe para visualização.
+        self.mp_drawing = mp.solutions.drawing_utils
+        self.mp_drawing_styles = mp.solutions.drawing_styles
+        logger.info("Utilidades de desenho do MediaPipe inicializadas.")
+
+    def estimate_pose(self, image: np.ndarray):
         """
-        Processa um único frame para detectar landmarks de pose.
+        Estima a pose em um único frame de imagem.
 
         Args:
-            frame (np.ndarray): O frame da imagem (formato BGR do OpenCV).
+            image (np.ndarray): O frame de imagem (array NumPy BGR).
 
         Returns:
-            tuple[np.ndarray, list]: Uma tupla contendo:
-                - O frame processado com os landmarks desenhados.
-                - Os dados dos landmarks (x, y, z, visibility) ou uma lista vazia se nenhum for detectado.
+            tuple: Uma tupla contendo (results, annotated_image).
+                   results: O objeto MediaPipe PoseResults contendo os landmarks detectados.
+                   annotated_image: O frame com os landmarks e conexões desenhados.
         """
-        # Converter a imagem BGR para RGB antes de processar com MediaPipe.
-        # MediaPipe espera imagens no formato RGB.
-        image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        
-        # Processar a imagem e detectar a pose.
+        # Converter a imagem de BGR para RGB, que é o formato esperado pelo MediaPipe.
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # Opcional: tornar a imagem não-gravável para melhor desempenho.
+        image_rgb.flags.writeable = False
+
+        # Processar a imagem para estimar a pose.
         results = self.pose.process(image_rgb)
 
-        # Desenhar os landmarks no frame original (BGR).
-        # Cria uma cópia para não modificar o frame original diretamente.
-        annotated_image = frame.copy()
-        landmarks_list = [] # Lista para armazenar os dados dos landmarks em formato de dicionário.
+        # Tornar a imagem gravável novamente para desenhar as anotações.
+        image_rgb.flags.writeable = True
+        # Converter de volta para BGR para exibição com OpenCV.
+        annotated_image = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
 
+        # Desenhar os landmarks da pose na imagem, se detectados.
         if results.pose_landmarks:
-            # Desenha as conexões e os landmarks da pose na imagem.
             self.mp_drawing.draw_landmarks(
                 annotated_image,
                 results.pose_landmarks,
-                self.mp_pose.POSE_CONNECTIONS, # Define como os landmarks devem ser conectados (esqueleto).
-                landmark_drawing_spec=self.mp_drawing_styles.get_default_pose_landmarks_style() # Estilo de desenho padrão.
+                mp.solutions.pose.POSE_CONNECTIONS,
+                landmark_drawing_spec=self.mp_drawing_styles.get_default_pose_landmarks_style(),
             )
-            # Armazenar os landmarks detectados em um formato mais acessível.
-            for landmark in results.pose_landmarks.landmark:
-                landmarks_list.append({
-                    'x': landmark.x,
-                    'y': landmark.y,
-                    'z': landmark.z,
-                    'visibility': landmark.visibility
-                })
-        else:
-            logger.debug("Nenhum landmark de pose detectado neste frame.")
+        return results, annotated_image
 
-        return annotated_image, landmarks_list
+    def get_landmarks_as_list(self, pose_landmarks):
+        """
+        Converte o objeto PoseLandmarks do MediaPipe em uma lista de dicionários
+        para facilitar o processamento.
+
+        Args:
+            pose_landmarks: O objeto `mp.solutions.pose.PoseLandmarks`.
+
+        Returns:
+            list: Uma lista de dicionários, onde cada dicionário representa um landmark
+                  com chaves 'x', 'y', 'z', 'visibility'.
+        """
+        if not pose_landmarks:
+            return None
+        landmarks_list = []
+        for landmark in pose_landmarks.landmark:
+            landmarks_list.append(
+                {
+                    "x": landmark.x,
+                    "y": landmark.y,
+                    "z": landmark.z,
+                    "visibility": landmark.visibility,
+                }
+            )
+        return landmarks_list
 
     def __del__(self):
         """
-        Libera os recursos do MediaPipe quando o objeto é destruído.
-        Adiciona uma verificação para evitar fechar um objeto já nulo/fechado.
+        Libera os recursos do modelo MediaPipe Pose quando o objeto é destruído.
         """
-        if self.pose:
-            try:
-                self.pose.close()
-                logger.info("Recursos do MediaPipe Pose liberados.")
-            except Exception as e:
-                # Captura qualquer erro que possa ocorrer durante o fechamento
-                # e registra como um aviso em vez de travar a aplicação.
-                logger.warning(f"Erro ao fechar recursos do MediaPipe Pose em __del__: {e}")
-        else:
-            logger.debug("MediaPipe Pose já estava fechado ou não inicializado ao tentar fechar em __del__.")
+        logger.info("Destruindo PoseEstimator e liberando recursos do MediaPipe Pose.")
+        if self.pose:  # Verifica se self.pose foi inicializado
+            self.pose.close()
+            logger.info("Recursos do MediaPipe Pose liberados.")

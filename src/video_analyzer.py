@@ -2,157 +2,242 @@
 
 import cv2
 import numpy as np
-import logging
-from src.utils import setup_logging
-from src.pose_estimator import PoseEstimator
-from src.motion_comparator import MotionComparator  # Importa o MotionComparator
-import io
-import os  # Importa os para manipulação de arquivos
-import tempfile  # Adicionar esta importação para criar arquivos temporários
+import mediapipe as mp
+import time
+import os
+import tempfile
+import threading
+import io  # Adicionado para lidar com bytes em memória
 
-logger = setup_logging()
+from src.utils import get_logger  # Importa get_logger do seu módulo de utilidades
+from src.pose_estimator import PoseEstimator  # Importa PoseEstimator
+from src.motion_comparator import MotionComparator  # Importa MotionComparator
+
+# Inicializa o logger para este módulo
+logger = get_logger(__name__)
 
 
 class VideoAnalyzer:
     """
-    Classe para analisar vídeos, extrair frames e aplicar detecção de pose,
-    e agora, comparar os movimentos de dois vídeos.
+    Classe responsável por analisar vídeos, detectar poses, comparar movimentos
+    e fornecer feedback.
     """
 
     def __init__(self):
         """
-        Inicializa o analisador de vídeo, o estimador de pose e o comparador de movimentos.
+        Inicializa o VideoAnalyzer, configurando o estimador de pose e o comparador de movimento.
         """
-        logger.info("Inicializando VideoAnalyzer...")
+        logger.info("Inicializando VideoAnalyzer...")  # Esta linha agora deve funcionar
+
+        # Inicializa o estimador de pose (MediaPipe Pose)
         self.pose_estimator = PoseEstimator()
-        self.motion_comparator = MotionComparator()  # Inicializa o MotionComparator
+        logger.info("PoseEstimator inicializado.")
 
-        # Listas para armazenar os landmarks de todos os frames para cada vídeo
-        self.aluno_landmarks_history = []
-        self.mestre_landmarks_history = []
+        # Inicializa o comparador de movimento
+        self.motion_comparator = MotionComparator()
+        logger.info("MotionComparator inicializado.")
 
-        logger.info("VideoAnalyzer inicializado.")
+        self.cap_aluno = None
+        self.cap_mestre = None
+        self.video_aluno_path = None
+        self.video_mestre_path = None
+        self.aluno_landmarks = []
+        self.mestre_landmarks = []
+        self.comparison_results = []
+        self.is_processing = False
+        self.processing_thread = None
+        self.current_frame_aluno = None
+        self.current_frame_mestre = None
+        logger.info("Variáveis de estado do VideoAnalyzer configuradas.")
 
-    def analyze_video(self, video_source: str | io.BytesIO):
+    def load_video_from_bytes(self, video_bytes: bytes, is_aluno: bool):
         """
-        Processa um vídeo, aplicando a detecção de pose em cada frame.
+        Carrega um vídeo a partir de bytes e o salva temporariamente para processamento.
 
         Args:
-            video_source (str | io.BytesIO): Caminho para o arquivo de vídeo (str)
-                                             ou um objeto BytesIO contendo os dados do vídeo.
-
-        Yields:
-            tuple[np.ndarray, list]: Uma tupla contendo:
-                - O frame processado com os landmarks desenhados.
-                - Os dados dos landmarks para o frame.
+            video_bytes (bytes): Os bytes do arquivo de vídeo.
+            is_aluno (bool): True se for o vídeo do aluno, False se for do mestre.
+        Returns:
+            str: O caminho para o arquivo de vídeo temporário.
+        Raises:
+            Exception: Se houver um erro ao salvar o arquivo.
         """
-        temp_file_path = None
-        cap = None
+        try:
+            # Cria um arquivo temporário para o vídeo
+            # NamedTemporaryFile garante que o arquivo é excluído quando fechado
+            # ou quando o programa termina, a menos que delete=False
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+            temp_file.write(video_bytes)
+            temp_file.close()
+            video_path = temp_file.name
+            logger.info(f"Vídeo temporário salvo em: {video_path}")
 
-        if isinstance(video_source, str):
-            # Se for um caminho de arquivo, abre diretamente com OpenCV
-            cap = cv2.VideoCapture(video_source)
-            logger.info(f"Abrindo vídeo do caminho: {video_source}")
-        elif isinstance(video_source, io.BytesIO):
-            # Se for BytesIO, cria um arquivo temporário para o OpenCV ler
-            try:
-                # O parâmetro delete=False permite que o arquivo seja fechado e reaberto pelo cv2
-                # e nós o removeremos explicitamente mais tarde.
-                with tempfile.NamedTemporaryFile(
-                    delete=False, suffix=".mp4"
-                ) as temp_file:
-                    temp_file.write(
-                        video_source.read()
-                    )  # Escreve o conteúdo do BytesIO no arquivo temporário.
-                    temp_file_path = temp_file.name
-                cap = cv2.VideoCapture(temp_file_path)
-                logger.info(
-                    f"Abrindo vídeo do BytesIO via arquivo temporário: {temp_file_path}"
-                )
-            except Exception as e:
-                logger.error(
-                    f"Erro ao criar arquivo temporário ou abrir vídeo de BytesIO: {e}"
-                )
-                if temp_file_path and os.path.exists(temp_file_path):
-                    os.remove(
-                        temp_file_path
-                    )  # Tenta remover o arquivo temporário em caso de erro
-                raise IOError(f"Não foi possível processar o vídeo do BytesIO: {e}")
-        else:
-            raise TypeError("video_source deve ser str ou io.BytesIO")
+            if is_aluno:
+                self.video_aluno_path = video_path
+                self.cap_aluno = cv2.VideoCapture(video_path)
+                if not self.cap_aluno.isOpened():
+                    raise Exception(
+                        f"Não foi possível abrir o vídeo do aluno em {video_path}"
+                    )
+                logger.info(f"Vídeo do aluno carregado: {video_path}")
+            else:
+                self.video_mestre_path = video_path
+                self.cap_mestre = cv2.VideoCapture(video_path)
+                if not self.cap_mestre.isOpened():
+                    raise Exception(
+                        f"Não foi possível abrir o vídeo do mestre em {video_path}"
+                    )
+                logger.info(f"Vídeo do mestre carregado: {video_path}")
+            return video_path
+        except Exception as e:
+            logger.error(f"Erro ao carregar vídeo de bytes: {e}")
+            raise
 
+    def process_video(self, video_path: str, is_aluno: bool):
+        """
+        Processa um vídeo para extrair landmarks de pose.
+
+        Args:
+            video_path (str): O caminho para o arquivo de vídeo.
+            is_aluno (bool): True se for o vídeo do aluno, False se for do mestre.
+        Returns:
+            list: Uma lista de landmarks extraídos.
+        """
+        logger.info(
+            f"Iniciando processamento do vídeo: {video_path} (Aluno: {is_aluno})"
+        )
+        cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
-            logger.error(f"Não foi possível abrir o vídeo: {video_source}")
-            # Tenta remover o arquivo temporário se ele foi criado e o cap não abriu
-            if temp_file_path and os.path.exists(temp_file_path):
-                os.remove(temp_file_path)
-            raise IOError(f"Não foi possível abrir o vídeo: {video_source}")
+            logger.error(f"Não foi possível abrir o vídeo: {video_path}")
+            return []
 
+        landmarks_list = []
         frame_count = 0
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
-                break  # Sai do loop se não houver mais frames
+                break
+
+            # Redimensionar o frame para acelerar o processamento, se necessário
+            # frame = cv2.resize(frame, (640, 480))
+
+            # Estimar pose
+            results, annotated_frame = self.pose_estimator.estimate_pose(frame)
+            if results.pose_landmarks:
+                landmarks_list.append(results.pose_landmarks)
+            else:
+                landmarks_list.append(
+                    None
+                )  # Adiciona None se nenhuma pose for detectada
+
+            # Armazenar o frame anotado para exibição posterior, se necessário
+            if is_aluno:
+                self.current_frame_aluno = annotated_frame
+            else:
+                self.current_frame_mestre = annotated_frame
 
             frame_count += 1
-            # logger.debug(f"Processando frame {frame_count}...")
+            if frame_count % 100 == 0:
+                logger.debug(f"Processando frame {frame_count} de {video_path}")
 
-            # Aplica a detecção de pose no frame
-            annotated_frame, landmarks_data = self.pose_estimator.process_frame(frame)
-
-            yield annotated_frame, landmarks_data  # Retorna o frame processado e os landmarks
-
-        cap.release()  # Libera o objeto VideoCapture
-        logger.info(f"Processamento de vídeo concluído. Total de frames: {frame_count}")
-
-        # Limpa o arquivo temporário se foi criado a partir de BytesIO
-        if temp_file_path and os.path.exists(temp_file_path):
-            try:
-                os.remove(temp_file_path)
-                logger.info(f"Arquivo temporário removido: {temp_file_path}")
-            except OSError as e:
-                logger.warning(
-                    f"Erro ao remover arquivo temporário {temp_file_path}: {e}"
-                )
-
-    def store_aluno_landmarks(self, landmarks_data: list):
-        """Armazena os landmarks do aluno."""
-        self.aluno_landmarks_history.append(landmarks_data)
-
-    def store_mestre_landmarks(self, landmarks_data: list):
-        """Armazena os landmarks do mestre."""
-        self.mestre_landmarks_history.append(landmarks_data)
-
-    def compare_processed_movements(self) -> tuple[list, list]:
-        """
-        Compara todos os movimentos processados do aluno com os do mestre
-        usando o MotionComparator.
-
-        Retorna:
-            tuple[list, list]: Uma tupla contendo:
-                - lista_comparacao_raw (list): Resultados detalhados da comparação frame a frame.
-                - feedback_text (list): Feedback textual gerado pelo MotionComparator.
-        """
-        logger.info("Iniciando a comparação dos movimentos armazenados...")
-        if not self.aluno_landmarks_history or not self.mestre_landmarks_history:
-            logger.warning(
-                "Não há dados de landmarks suficientes para a comparação (aluno ou mestre estão vazios)."
-            )
-            return [], [
-                "Erro: Não há dados suficientes para comparar os movimentos. Certifique-se de que ambos os vídeos foram processados."
-            ]
-
-        # Chama o MotionComparator com os históricos completos de landmarks
-        raw_comparison, feedback_text = self.motion_comparator.compare_movements(
-            self.aluno_landmarks_history, self.mestre_landmarks_history
+        cap.release()
+        logger.info(
+            f"Processamento do vídeo {video_path} concluído. Total de frames com landmarks: {len([l for l in landmarks_list if l is not None])}"
         )
-        logger.info("Comparação de movimentos concluída pelo MotionComparator.")
-        return raw_comparison, feedback_text
+        return landmarks_list
+
+    def analyze_and_compare(self):
+        """
+        Inicia o processo de análise e comparação dos vídeos do aluno e do mestre.
+        """
+        if not self.video_aluno_path or not self.video_mestre_path:
+            logger.warning(
+                "Caminhos dos vídeos não definidos. Carregue os vídeos primeiro."
+            )
+            return False
+
+        if self.is_processing:
+            logger.info("Análise já em andamento.")
+            return False
+
+        self.is_processing = True
+        logger.info("Iniciando a thread de processamento de vídeo.")
+        self.processing_thread = threading.Thread(target=self._run_analysis_thread)
+        self.processing_thread.start()
+        return True
+
+    def _run_analysis_thread(self):
+        """
+        Método executado em uma thread separada para processar e comparar os vídeos.
+        """
+        try:
+            logger.info("Thread de análise iniciada.")
+            self.aluno_landmarks = self.process_video(
+                self.video_aluno_path, is_aluno=True
+            )
+            self.mestre_landmarks = self.process_video(
+                self.video_mestre_path, is_aluno=False
+            )
+
+            if not self.aluno_landmarks or not self.mestre_landmarks:
+                logger.warning(
+                    "Não foi possível extrair landmarks de um ou ambos os vídeos. Comparação abortada."
+                )
+                self.is_processing = False
+                return
+
+            logger.info("Iniciando comparação de movimentos...")
+            self.comparison_results = self.motion_comparator.compare_poses(
+                self.aluno_landmarks, self.mestre_landmarks
+            )
+            logger.info(
+                f"Comparação de movimentos concluída. Resultados: {len(self.comparison_results)} pontos de comparação."
+            )
+
+        except Exception as e:
+            logger.error(f"Erro durante a análise e comparação na thread: {e}")
+        finally:
+            self.is_processing = False
+            logger.info("Thread de análise finalizada.")
+
+    def get_current_annotated_frames(self):
+        """
+        Retorna os frames anotados atuais do aluno e do mestre.
+        """
+        return self.current_frame_aluno, self.current_frame_mestre
+
+    def get_comparison_results(self):
+        """
+        Retorna os resultados da última comparação.
+        """
+        return self.comparison_results
 
     def __del__(self):
         """
-        Garante que os recursos do PoseEstimator sejam liberados.
+        Limpa os recursos quando o objeto VideoAnalyzer é destruído.
         """
+        logger.info("Destruindo VideoAnalyzer e liberando recursos.")
+        if self.cap_aluno and self.cap_aluno.isOpened():
+            self.cap_aluno.release()
+            logger.info("Cap_aluno liberado.")
+        if self.cap_mestre and self.cap_mestre.isOpened():
+            self.cap_mestre.release()
+            logger.info("Cap_mestre liberado.")
+        if self.video_aluno_path and os.path.exists(self.video_aluno_path):
+            os.remove(self.video_aluno_path)
+            logger.info(
+                f"Arquivo temporário do aluno removido: {self.video_aluno_path}"
+            )
+        if self.video_mestre_path and os.path.exists(self.video_mestre_path):
+            os.remove(self.video_mestre_path)
+            logger.info(
+                f"Arquivo temporário do mestre removido: {self.video_mestre_path}"
+            )
+
+        # Garante que os recursos do PoseEstimator e MotionComparator sejam liberados
         if self.pose_estimator and hasattr(self.pose_estimator, "__del__"):
             self.pose_estimator.__del__()
-            logger.info("Recursos do PoseEstimator liberados via VideoAnalyzer.")
+            logger.info("PoseEstimator recursos liberados.")
+        if self.motion_comparator and hasattr(self.motion_comparator, "__del__"):
+            self.motion_comparator.__del__()
+            logger.info("MotionComparator recursos liberados.")
