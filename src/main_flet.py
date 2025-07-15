@@ -1,3 +1,4 @@
+import asyncio # Importa a biblioteca asyncio para operações assíncronas e de thread
 import flet as ft
 import logging
 import os
