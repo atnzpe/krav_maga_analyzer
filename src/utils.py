@@ -31,50 +31,42 @@ def setup_logging():
 
     # Configura a base do sistema de logging
     logging.basicConfig(
-        level=logging.INFO,  # Define o nível mínimo de log a ser registrado (INFO, DEBUG, WARNING, ERROR, CRITICAL)
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",  # Define o formato das mensagens de log
+        level=logging.INFO,  # Define o nível mínimo de log a ser registrado
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",  # Formato das mensagens de log.
         handlers=[
             logging.FileHandler(
                 log_file_path
-            ),  # Handler para gravar logs em um arquivo
+            ),  # Handler para gravar logs em um arquivo.
             logging.StreamHandler(
                 sys.stdout
-            ),  # Handler para exibir logs no console (saída padrão)
+            ),  # Handler para exibir logs no console (saída padrão).
         ],
     )
-    # Configura o nível de logging para módulos específicos para evitar logs excessivamente verbosos
-    logging.getLogger("flet").setLevel(
-        logging.WARNING
-    )  # Ignora logs de INFO/DEBUG de Flet
+    # Configura o nível de logging para o módulo 'flet' para WARNING ou ERROR
+    # para evitar logs muito verbosos do framework que podem poluir o console.
+    logging.getLogger("flet").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(
         logging.WARNING
-    )  # Ignora logs de INFO/DEBUG de requisições HTTP
+    )  # Para requests HTTP de flet/streamlit, que também podem ser verbosos.
 
-    return logging.getLogger(
-        __name__
-    )  # Retorna um logger específico para o módulo atual
+    # Retorna um logger específico para o módulo que o chamou (__name__).
+    # Isso permite que as mensagens de log incluam o nome do módulo de origem.
+    return logging.getLogger(__name__)
 
 
 def calculate_angle(p1: dict, p2: dict, p3: dict) -> float:
     """
-    Calcula o ângulo em 3D entre três pontos (p1-p2-p3) onde p2 é o vértice.
-    Esta função é crucial para a análise de movimento, permitindo quantificar
-    a posição relativa das articulações do corpo.
+    Calcula o ângulo em 3D entre três pontos (landmarks).
 
-    Argumentos:
-        p1 (dict): Primeiro ponto (ex: Ombro), com chaves 'x', 'y', 'z' representando coordenadas 3D.
-        p2 (dict): Ponto do vértice (ex: Cotovelo), com chaves 'x', 'y', 'z'. Este é o ponto central do ângulo.
-        p3 (dict): Terceiro ponto (ex: Punho), com chaves 'x', 'y', 'z'.
+    Args:
+        p1 (dict): Dicionário contendo as coordenadas (x, y, z) do primeiro ponto.
+        p2 (dict): Dicionário contendo as coordenadas (x, y, z) do ponto central (vértice do ângulo).
+        p3 (dict): Dicionário contendo as coordenadas (x, y, z) do terceiro ponto.
 
-    Retorna:
-        float: O ângulo em graus, entre 0 e 180. Retorna 0.0 se houver pontos coincidentes
-               ou vetores nulos para evitar erros matemáticos.
-
-    Bibliotecas Utilizadas:
-        numpy: Para operações de vetorização e cálculo de produto escalar e norma.
+    Returns:
+        float: O ângulo em graus entre os três pontos. Retorna 0.0 se houver pontos coincidentes.
     """
-    # Converte os dicionários de pontos em arrays NumPy.
-    # Isso permite realizar operações matemáticas de vetor de forma eficiente.
+    # Converte os dicionários de pontos para arrays NumPy para facilitar operações matemáticas.
     p1_array = np.array([p1["x"], p1["y"], p1["z"]])
     p2_array = np.array([p2["x"], p2["y"], p2["z"]])
     p3_array = np.array([p3["x"], p3["y"], p3["z"]])
@@ -102,12 +94,11 @@ def calculate_angle(p1: dict, p2: dict, p3: dict) -> float:
         return 0.0
 
     # Calcula o cosseno do ângulo.
-    # Adiciona np.clip para garantir que o valor esteja no intervalo [-1, 1] devido a pequenas imprecisões de ponto flutuante.
+    # Adiciona np.clip para garantir que o valor esteja no intervalo [-1, 1] antes de np.arccos.
+    # Isso evita erros de domínio para valores ligeiramente fora devido a imprecisões de ponto flutuante.
     cosine_angle = dot_product / (magnitude_v1 * magnitude_v2)
-    cosine_angle = np.clip(cosine_angle, -1.0, 1.0)
+    angle_rad = np.arccos(np.clip(cosine_angle, -1.0, 1.0))
 
-    # Converte o cosseno do ângulo de volta para graus.
-    angle_rad = np.arccos(cosine_angle)  # Ângulo em radianos
-    angle_deg = np.degrees(angle_rad)  # Converte radianos para graus
-
+    # Converte o ângulo de radianos para graus e retorna.
+    angle_deg = np.degrees(angle_rad)
     return angle_deg

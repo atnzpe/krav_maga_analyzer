@@ -1,0 +1,78 @@
+2025-07-14 21:29:22,134 - src.utils - INFO - Iniciando a aplicação Flet...
+2025-07-14 21:29:22,147 - src.utils - INFO - Elementos da UI Flet adicionados e página atualizada.
+2025-07-14 21:29:25,180 - asyncio - ERROR - Future exception was never retrieved
+future: <Future finished exception=TypeError("FilePicker.pick_files() got an unexpected keyword argument 'allowed_file_extensions'")>
+Traceback (most recent call last):
+  File "C:\Users\gleyson\AppData\Local\Programs\Python\Python311\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gleyson\Desktop\Gleyson\workspace\krav_maga_analyzer\.venv\Lib\site-packages\flet\core\page.py", line 906, in wrapper
+    handler(*args)
+  File "C:\Users\gleyson\Desktop\Gleyson\workspace\krav_maga_analyzer\src\main_flet.py", line 455, in <lambda>
+    on_click=lambda _: file_picker_aluno.pick_files(
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: FilePicker.pick_files() got an unexpected keyword argument 'allowed_file_extensions'
+2025-07-14 21:29:28,580 - asyncio - ERROR - Future exception was never retrieved
+future: <Future finished exception=TypeError("FilePicker.pick_files() got an unexpected keyword argument 'allowed_file_extensions'")>
+Traceback (most recent call last):
+  File "C:\Users\gleyson\AppData\Local\Programs\Python\Python311\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gleyson\Desktop\Gleyson\workspace\krav_maga_analyzer\.venv\Lib\site-packages\flet\core\page.py", line 906, in wrapper
+    handler(*args)
+  File "C:\Users\gleyson\Desktop\Gleyson\workspace\krav_maga_analyzer\src\main_flet.py", line 464, in <lambda>
+    on_click=lambda _: file_picker_mestre.pick_files(
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: FilePicker.pick_files() got an unexpected keyword argument 'allowed_file_extensions'
+2025-07-14 21:29:35,472 - asyncio - ERROR - Future exception was never retrieved
+future: <Future finished exception=AssertionError()>
+Traceback (most recent call last):
+  File "C:\Users\gleyson\AppData\Local\Programs\Python\Python311\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gleyson\Desktop\Gleyson\workspace\krav_maga_analyzer\.venv\Lib\site-packages\flet\core\page.py", line 906, in wrapper
+    handler(*args)
+  File "C:\Users\gleyson\Desktop\Gleyson\workspace\krav_maga_analyzer\src\main_flet.py", line 513, in <lambda>
+    on_click=lambda e: page.run_task(
+                       ^^^^^^^^^^^^^^
+  File "C:\Users\gleyson\Desktop\Gleyson\workspace\krav_maga_analyzer\.venv\Lib\site-packages\flet\core\page.py", line 887, in run_task
+    assert asyncio.iscoroutinefunction(handler)
+AssertionError
+2025-07-14 21:29:41,478 - asyncio - ERROR - Future exception was never retrieved
+future: <Future finished exception=AssertionError()>
+Traceback (most recent call last):
+  File "C:\Users\gleyson\AppData\Local\Programs\Python\Python311\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gleyson\Desktop\Gleyson\workspace\krav_maga_analyzer\.venv\Lib\site-packages\flet\core\page.py", line 906, in wrapper
+    handler(*args)
+  File "C:\Users\gleyson\Desktop\Gleyson\workspace\krav_maga_analyzer\src\main_flet.py", line 521, in <lambda>
+    on_click=lambda e: page.run_task(
+                       ^^^^^^^^^^^^^^
+  File "C:\Users\gleyson\Desktop\Gleyson\workspace\krav_maga_analyzer\.venv\Lib\site-packages\flet\core\page.py", line 887, in run_task
+    assert asyncio.iscoroutinefunction(handler)
+AssertionError
+2025-07-14 21:29:44,763 - asyncio - ERROR - Future exception was never retrieved
+future: <Future finished exception=TypeError("FilePicker.pick_files() got an unexpected keyword argument 'allowed_file_extensions'")>
+Traceback (most recent call last):
+  File "C:\Users\gleyson\AppData\Local\Programs\Python\Python311\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gleyson\Desktop\Gleyson\workspace\krav_maga_analyzer\.venv\Lib\site-packages\flet\core\page.py", line 906, in wrapper
+    handler(*args)
+  File "C:\Users\gleyson\Desktop\Gleyson\workspace\krav_maga_analyzer\src\main_flet.py", line 455, in <lambda>
+    on_click=lambda _: file_picker_aluno.pick_files(
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: FilePicker.pick_files() got an unexpected keyword argument 'allowed_file_extensions'
+2025-07-14 21:29:46,208 - asyncio - ERROR - Future exception was never retrieved
+future: <Future finished exception=TypeError("FilePicker.pick_files() got an unexpected keyword argument 'allowed_file_extensions'")>
+Traceback (most recent call last):
+  File "C:\Users\gleyson\AppData\Local\Programs\Python\Python311\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gleyson\Desktop\Gleyson\workspace\krav_maga_analyzer\.venv\Lib\site-packages\flet\core\page.py", line 906, in wrapper
+    handler(*args)
+  File "C:\Users\gleyson\Desktop\Gleyson\workspace\krav_maga_analyzer\src\main_flet.py", line 464, in <lambda>
+    on_click=lambda _: file_picker_mestre.pick_files(
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: FilePicker.pick_files() got an unexpected keyword argument 'allowed_file_extensions'

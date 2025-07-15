@@ -8,7 +8,7 @@ from src.pose_estimator import PoseEstimator
 from src.motion_comparator import MotionComparator  # Importa o MotionComparator
 import io
 import os  # Importa os para manipulação de arquivos
-import tempfile  # Adicionar esta importação
+import tempfile  # Adicionar esta importação para criar arquivos temporários
 
 logger = setup_logging()
 
@@ -46,38 +46,53 @@ class VideoAnalyzer:
                 - O frame processado com os landmarks desenhados.
                 - Os dados dos landmarks para o frame.
         """
-        temp_file_path = None  # Inicializa como None
+        temp_file_path = None
+        cap = None
+
         if isinstance(video_source, str):
             # Se for um caminho de arquivo, abre diretamente com OpenCV
             cap = cv2.VideoCapture(video_source)
             logger.info(f"Abrindo vídeo do caminho: {video_source}")
         elif isinstance(video_source, io.BytesIO):
-            # Se for BytesIO, salva para um arquivo temporário para o OpenCV ler
-            logger.info("Recebido BytesIO, salvando para arquivo temporário...")
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
-                temp_file.write(video_source.read())
-                temp_file_path = temp_file.name
-            cap = cv2.VideoCapture(temp_file_path)
-            logger.info(f"Abrindo vídeo de arquivo temporário: {temp_file_path}")
+            # Se for BytesIO, cria um arquivo temporário para o OpenCV ler
+            try:
+                # O parâmetro delete=False permite que o arquivo seja fechado e reaberto pelo cv2
+                # e nós o removeremos explicitamente mais tarde.
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".mp4"
+                ) as temp_file:
+                    temp_file.write(
+                        video_source.read()
+                    )  # Escreve o conteúdo do BytesIO no arquivo temporário.
+                    temp_file_path = temp_file.name
+                cap = cv2.VideoCapture(temp_file_path)
+                logger.info(
+                    f"Abrindo vídeo do BytesIO via arquivo temporário: {temp_file_path}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"Erro ao criar arquivo temporário ou abrir vídeo de BytesIO: {e}"
+                )
+                if temp_file_path and os.path.exists(temp_file_path):
+                    os.remove(
+                        temp_file_path
+                    )  # Tenta remover o arquivo temporário em caso de erro
+                raise IOError(f"Não foi possível processar o vídeo do BytesIO: {e}")
         else:
-            logger.error(f"Tipo de video_source não suportado: {type(video_source)}")
-            raise ValueError(
-                "Tipo de video_source não suportado. Deve ser str ou io.BytesIO."
-            )
+            raise TypeError("video_source deve ser str ou io.BytesIO")
 
         if not cap.isOpened():
-            logger.error(
-                f"Não foi possível abrir o vídeo: {video_source if isinstance(video_source, str) else 'do BytesIO/temp file'}"
-            )
-            raise IOError(
-                f"Não foi possível abrir o vídeo: {video_source if isinstance(video_source, str) else 'do BytesIO/temp file'}"
-            )
+            logger.error(f"Não foi possível abrir o vídeo: {video_source}")
+            # Tenta remover o arquivo temporário se ele foi criado e o cap não abriu
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+            raise IOError(f"Não foi possível abrir o vídeo: {video_source}")
 
         frame_count = 0
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
-                break
+                break  # Sai do loop se não houver mais frames
 
             frame_count += 1
             # logger.debug(f"Processando frame {frame_count}...")
@@ -85,9 +100,9 @@ class VideoAnalyzer:
             # Aplica a detecção de pose no frame
             annotated_frame, landmarks_data = self.pose_estimator.process_frame(frame)
 
-            yield annotated_frame, landmarks_data  # Retorna o frame e os landmarks para o chamador
+            yield annotated_frame, landmarks_data  # Retorna o frame processado e os landmarks
 
-        cap.release()
+        cap.release()  # Libera o objeto VideoCapture
         logger.info(f"Processamento de vídeo concluído. Total de frames: {frame_count}")
 
         # Limpa o arquivo temporário se foi criado a partir de BytesIO
@@ -100,28 +115,13 @@ class VideoAnalyzer:
                     f"Erro ao remover arquivo temporário {temp_file_path}: {e}"
                 )
 
-    def store_landmarks(self, video_type: str, landmarks_data: list):
-        """
-        Armazena os dados de landmarks de um frame processado.
+    def store_aluno_landmarks(self, landmarks_data: list):
+        """Armazena os landmarks do aluno."""
+        self.aluno_landmarks_history.append(landmarks_data)
 
-        Argumentos:
-            video_type (str): O tipo de vídeo ('aluno' ou 'mestre').
-            landmarks_data (list): A lista de dicionários de landmarks para um frame.
-        """
-        if video_type == "aluno":
-            self.aluno_landmarks_history.append(landmarks_data)
-            logger.debug(
-                f"Landmarks do frame do aluno armazenados. Total: {len(self.aluno_landmarks_history)}"
-            )
-        elif video_type == "mestre":
-            self.mestre_landmarks_history.append(landmarks_data)
-            logger.debug(
-                f"Landmarks do frame do mestre armazenados. Total: {len(self.mestre_landmarks_history)}"
-            )
-        else:
-            logger.warning(
-                f"Tipo de vídeo desconhecido '{video_type}'. Landmarks não armazenados."
-            )
+    def store_mestre_landmarks(self, landmarks_data: list):
+        """Armazena os landmarks do mestre."""
+        self.mestre_landmarks_history.append(landmarks_data)
 
     def compare_processed_movements(self) -> tuple[list, list]:
         """
@@ -142,6 +142,7 @@ class VideoAnalyzer:
                 "Erro: Não há dados suficientes para comparar os movimentos. Certifique-se de que ambos os vídeos foram processados."
             ]
 
+        # Chama o MotionComparator com os históricos completos de landmarks
         raw_comparison, feedback_text = self.motion_comparator.compare_movements(
             self.aluno_landmarks_history, self.mestre_landmarks_history
         )
