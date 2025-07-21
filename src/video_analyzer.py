@@ -57,6 +57,7 @@ class VideoAnalyzer:
             f"Carregando vídeo a partir de bytes para {'aluno' if is_aluno else 'mestre'}."
         )
         try:
+            # Usamos NamedTemporaryFile para garantir que o arquivo seja limpo na exclusão do objeto.
             temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
             temp_file.write(video_bytes)
             temp_file.close()
@@ -66,14 +67,14 @@ class VideoAnalyzer:
                 self.video_aluno_path = video_path
                 self.cap_aluno = cv2.VideoCapture(video_path)
                 if not self.cap_aluno.isOpened():
-                    raise Exception(
+                    raise IOError(
                         f"Não foi possível abrir o vídeo do aluno em {video_path}"
                     )
             else:
                 self.video_mestre_path = video_path
                 self.cap_mestre = cv2.VideoCapture(video_path)
                 if not self.cap_mestre.isOpened():
-                    raise Exception(
+                    raise IOError(
                         f"Não foi possível abrir o vídeo do mestre em {video_path}"
                     )
 
@@ -82,44 +83,36 @@ class VideoAnalyzer:
             )
             return video_path
         except Exception as e:
-            logger.error(f"Erro ao carregar vídeo de bytes: {e}")
+            logger.error(f"Erro ao carregar vídeo de bytes: {e}", exc_info=True)
             raise
 
-    def analyze_and_compare(self):
+    def analyze_and_compare_sync(self):
         """
-        Inicia o processo de análise e comparação em uma nova thread.
-        """
-        if not self.video_aluno_path or not self.video_mestre_path:
-            logger.warning("Caminhos dos vídeos não definidos. Análise abortada.")
-            return False
-        if self.is_processing:
-            logger.info("Análise já está em andamento.")
-            return False
-
-        self.is_processing = True
-        logger.info("Iniciando a thread de processamento de vídeo.")
-        self.processing_thread = threading.Thread(target=self._run_analysis_thread)
-        self.processing_thread.start()
-        return True
-
-    def _run_analysis_thread(self):
-        """
-        Método principal executado na thread. Processa os vídeos e compara os frames.
+        Método SÍNCRONO que executa toda a análise. Deve ser chamado em uma thread.
         """
         try:
-            logger.info("Thread de análise iniciada.")
+            logger.info("Análise síncrona iniciada.")
 
-            # Limpa dados de análises anteriores
             self.aluno_landmarks.clear()
             self.mestre_landmarks.clear()
             self.processed_frames_aluno.clear()
             self.processed_frames_mestre.clear()
             self.comparison_results.clear()
 
-            # Garante que os captures estejam abertos
-            if not self.cap_aluno or not self.cap_mestre:
-                logger.error("Objetos de captura de vídeo não estão inicializados.")
-                return
+            if (
+                not self.cap_aluno
+                or not self.cap_mestre
+                or not self.cap_aluno.isOpened()
+                or not self.cap_mestre.isOpened()
+            ):
+                logger.error(
+                    "Objetos de captura de vídeo não estão inicializados ou abertos. Reinicializando..."
+                )
+                self.cap_aluno = cv2.VideoCapture(self.video_aluno_path)
+                self.cap_mestre = cv2.VideoCapture(self.video_mestre_path)
+                if not self.cap_aluno.isOpened() or not self.cap_mestre.isOpened():
+                    logger.critical("Falha ao reabrir os vídeos. Análise abortada.")
+                    return
 
             num_frames = min(
                 int(self.cap_aluno.get(cv2.CAP_PROP_FRAME_COUNT)),
@@ -137,7 +130,6 @@ class VideoAnalyzer:
                     )
                     break
 
-                # Estima a pose para ambos os frames
                 results_aluno, annotated_aluno = self.pose_estimator.estimate_pose(
                     frame_aluno
                 )
@@ -145,11 +137,9 @@ class VideoAnalyzer:
                     frame_mestre
                 )
 
-                # Armazena os frames anotados
                 self.processed_frames_aluno.append(annotated_aluno)
                 self.processed_frames_mestre.append(annotated_mestre)
 
-                # Armazena os landmarks
                 lm_aluno = self.pose_estimator.get_landmarks_as_list(
                     results_aluno.pose_landmarks
                 )
@@ -159,40 +149,38 @@ class VideoAnalyzer:
                 self.aluno_landmarks.append(lm_aluno)
                 self.mestre_landmarks.append(lm_mestre)
 
-                # Compara as poses e armazena o resultado
                 score, feedback, _ = self.motion_comparator.compare_poses(
                     lm_aluno, lm_mestre
                 )
                 self.comparison_results.append({"score": score, "feedback": feedback})
 
-                if i % 50 == 0:
+                if i % 50 == 0 and i > 0:
                     logger.info(f"Processados {i}/{num_frames} frames...")
 
         except Exception as e:
-            logger.error(
-                f"Erro catastrófico durante a análise na thread: {e}", exc_info=True
-            )
+            logger.error(f"Erro catastrófico durante a análise: {e}", exc_info=True)
         finally:
-            self.is_processing = False
-            # Libera os captures após o uso
             if self.cap_aluno:
                 self.cap_aluno.release()
             if self.cap_mestre:
                 self.cap_mestre.release()
-            logger.info("Thread de análise finalizada e recursos de vídeo liberados.")
+            logger.info("Análise síncrona finalizada e recursos de vídeo liberados.")
 
     def __del__(self):
         """
-        Limpa os recursos quando o objeto VideoAnalyzer é destruído.
+        Limpa os arquivos temporários quando o objeto é destruído.
         """
         logger.info("Destruindo VideoAnalyzer e limpando arquivos temporários.")
-        if self.video_aluno_path and os.path.exists(self.video_aluno_path):
-            os.remove(self.video_aluno_path)
-            logger.info(
-                f"Arquivo temporário do aluno removido: {self.video_aluno_path}"
-            )
-        if self.video_mestre_path and os.path.exists(self.video_mestre_path):
-            os.remove(self.video_mestre_path)
-            logger.info(
-                f"Arquivo temporário do mestre removido: {self.video_mestre_path}"
-            )
+        try:
+            if self.video_aluno_path and os.path.exists(self.video_aluno_path):
+                os.remove(self.video_aluno_path)
+                logger.info(
+                    f"Arquivo temporário do aluno removido: {self.video_aluno_path}"
+                )
+            if self.video_mestre_path and os.path.exists(self.video_mestre_path):
+                os.remove(self.video_mestre_path)
+                logger.info(
+                    f"Arquivo temporário do mestre removido: {self.video_mestre_path}"
+                )
+        except Exception as e:
+            logger.error(f"Erro ao limpar arquivos temporários: {e}")

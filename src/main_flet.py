@@ -1,46 +1,32 @@
 # src/main_flet.py
 
-# --------------------------------------------------------------------------------------------------
-# Importação de Bibliotecas Essenciais
-# --------------------------------------------------------------------------------------------------
 import flet as ft
 import logging
 import os
 import cv2
 import base64
-import threading
-import sys
 import asyncio
+import sys
 
-# --- Adiciona o diretório raiz do projeto ao path ---
+# Adiciona o diretório raiz do projeto ao path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-# --- Importação dos Módulos do Projeto ---
 from src.utils import setup_logging, get_logger
 from src.video_analyzer import VideoAnalyzer
 
-# --------------------------------------------------------------------------------------------------
-# Configuração Inicial
-# --------------------------------------------------------------------------------------------------
 setup_logging()
 logger = get_logger(__name__)
 
 
-# --------------------------------------------------------------------------------------------------
-# Classe Principal da Aplicação Flet
-# --------------------------------------------------------------------------------------------------
 class KravMagaApp:
     """
-    Classe que encapsula toda a lógica e a interface do usuário da aplicação.
+    Encapsula toda a lógica e a interface do usuário da aplicação.
     """
 
     def __init__(self, page: ft.Page):
-        """
-        Inicializador da classe da aplicação.
-        """
         self.page = page
         self.video_analyzer = None
-        self.is_playing = False  # Estado para controlar a reprodução automática.
+        self.is_playing = False
 
         self.setup_controls()
         self.build_layout()
@@ -51,14 +37,14 @@ class KravMagaApp:
         logger.info("Inicializando todos os controles da UI.")
 
         self.status_text = ft.Text(
-            "Por favor, carregue ambos os vídeos para iniciar a análise.",
+            "Por favor, carregue os vídeos do aluno e do mestre.",
             text_align=ft.TextAlign.CENTER,
             size=16,
         )
         self.analyze_button = ft.ElevatedButton(
             "Analisar Movimentos",
             icon=ft.icons.ANALYTICS,
-            on_click=self.analyze_videos,
+            on_click=self.on_analyze_click,
             disabled=True,
         )
 
@@ -73,9 +59,8 @@ class KravMagaApp:
             border_radius=ft.border_radius.all(10),
         )
 
-        # Placeholders que serão mostrados antes e durante a análise.
         self.aluno_placeholder = ft.Container(
-            content=ft.Text("Carregue o vídeo do Aluno"),
+            content=ft.Text("Vídeo do Aluno"),
             width=500,
             height=400,
             bgcolor=ft.colors.BLACK26,
@@ -83,7 +68,7 @@ class KravMagaApp:
             alignment=ft.alignment.center,
         )
         self.mestre_placeholder = ft.Container(
-            content=ft.Text("Carregue o vídeo do Mestre"),
+            content=ft.Text("Vídeo do Mestre"),
             width=500,
             height=400,
             bgcolor=ft.colors.BLACK26,
@@ -97,12 +82,10 @@ class KravMagaApp:
             divisions=1,
             value=0,
             disabled=True,
-            visible=False,
             on_change=self.on_slider_change,
             expand=True,
         )
 
-        # --- NOVOS CONTROLES DE REPRODUÇÃO ---
         self.play_button = ft.IconButton(
             icon=ft.icons.PLAY_ARROW,
             on_click=self.toggle_play_pause,
@@ -127,17 +110,14 @@ class KravMagaApp:
             alignment=ft.MainAxisAlignment.CENTER,
         )
 
-        self.file_picker_aluno = ft.FilePicker(
-            on_result=lambda e: self.pick_file_result(e, is_aluno=True)
-        )
+        self.file_picker_aluno = ft.FilePicker(on_result=self.on_pick_file_result_aluno)
         self.file_picker_mestre = ft.FilePicker(
-            on_result=lambda e: self.pick_file_result(e, is_aluno=False)
+            on_result=self.on_pick_file_result_mestre
         )
         self.page.overlay.extend([self.file_picker_aluno, self.file_picker_mestre])
 
     def build_layout(self):
         """Constrói o layout visual da aplicação."""
-        logger.info("Construindo o layout da UI.")
         self.page.title = "Analisador de Movimentos de Krav Maga"
         self.page.vertical_alignment = ft.MainAxisAlignment.START
         self.page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
@@ -146,7 +126,7 @@ class KravMagaApp:
 
         self.page.add(
             ft.Column(
-                [
+                controls=[
                     ft.Text(
                         "Analisador de Movimentos de Krav Maga 🥋",
                         size=28,
@@ -216,29 +196,30 @@ class KravMagaApp:
         )
         self.page.update()
 
-    def pick_file_result(self, e: ft.FilePickerResultEvent, is_aluno: bool):
-        """Manipulador de evento para quando um arquivo é selecionado."""
+    async def on_pick_file_result_aluno(self, e: ft.FilePickerResultEvent):
+        await self.pick_file_result(e, is_aluno=True)
+
+    async def on_pick_file_result_mestre(self, e: ft.FilePickerResultEvent):
+        await self.pick_file_result(e, is_aluno=False)
+
+    async def pick_file_result(self, e: ft.FilePickerResultEvent, is_aluno: bool):
         if not e.files:
             return
         video_path = e.files[0].path
         storage_key = "video_aluno_path" if is_aluno else "video_mestre_path"
-        self.page.client_storage.set(storage_key, video_path)
+        await self.page.client_storage.set_async(storage_key, video_path)
         logger.info(
             f"Caminho do vídeo {'aluno' if is_aluno else 'mestre'} salvo: {video_path}"
         )
-        self.update_status_and_button_state()
+        await self.update_status_and_button_state()
 
-    def update_status_and_button_state(self):
-        """Verifica se ambos os vídeos foram carregados e atualiza o estado do botão."""
-        aluno_path = self.page.client_storage.get("video_aluno_path")
-        mestre_path = self.page.client_storage.get("video_mestre_path")
+    async def update_status_and_button_state(self):
+        aluno_path = await self.page.client_storage.get_async("video_aluno_path")
+        mestre_path = await self.page.client_storage.get_async("video_mestre_path")
 
         if aluno_path and mestre_path:
             self.analyze_button.disabled = False
             self.status_text.value = "Vídeos carregados. Pronto para analisar."
-            logger.info(
-                "Ambos os vídeos foram selecionados. Botão de análise habilitado."
-            )
         elif aluno_path:
             self.status_text.value = (
                 "Vídeo do aluno carregado. Aguardando vídeo do mestre."
@@ -248,47 +229,45 @@ class KravMagaApp:
                 "Vídeo do mestre carregado. Aguardando vídeo do aluno."
             )
 
-        self.page.update()
+        await self.page.update_async()
 
-    def analyze_videos(self, e):
-        """Inicia a análise dos vídeos em uma thread."""
-        logger.info("Botão de análise clicado. Iniciando processo.")
+    async def on_analyze_click(self, e):
+        await self.page.run_task(self.analyze_videos_async)
+
+    async def analyze_videos_async(self):
+        """Função assíncrona que executa a análise de vídeo."""
+        logger.info("Iniciando tarefa de análise assíncrona.")
         self.status_text.value = "Análise em andamento, por favor aguarde..."
         self.analyze_button.disabled = True
         self.aluno_placeholder.content = ft.ProgressRing()
         self.mestre_placeholder.content = ft.ProgressRing()
-        self.page.update()
+        self.aluno_placeholder.visible = True
+        self.mestre_placeholder.visible = True
+        await self.page.update_async()
 
-        aluno_path = self.page.client_storage.get("video_aluno_path")
-        mestre_path = self.page.client_storage.get("video_mestre_path")
+        aluno_path = await self.page.client_storage.get_async("video_aluno_path")
+        mestre_path = await self.page.client_storage.get_async("video_mestre_path")
 
         self.video_analyzer = VideoAnalyzer()
         try:
             with open(aluno_path, "rb") as f:
-                self.video_analyzer.load_video_from_bytes(f.read(), is_aluno=True)
+                aluno_bytes = f.read()
             with open(mestre_path, "rb") as f:
-                self.video_analyzer.load_video_from_bytes(f.read(), is_aluno=False)
+                mestre_bytes = f.read()
+
+            self.video_analyzer.load_video_from_bytes(aluno_bytes, is_aluno=True)
+            self.video_analyzer.load_video_from_bytes(mestre_bytes, is_aluno=False)
+
+            await asyncio.to_thread(self.video_analyzer.analyze_and_compare_sync)
+
+            logger.info("Análise na thread concluída. Atualizando UI.")
+            await self.setup_ui_post_analysis()
         except Exception as ex:
-            logger.error(f"Falha ao carregar vídeos para análise: {ex}")
-            self.status_text.value = f"Erro ao ler os arquivos de vídeo: {ex}"
-            self.page.update()
-            return
+            logger.error(f"Falha na tarefa de análise: {ex}", exc_info=True)
+            self.status_text.value = f"Erro durante a análise: {ex}"
+            await self.page.update_async()
 
-        threading.Thread(target=self.run_analysis_and_update_ui, daemon=True).start()
-
-    def run_analysis_and_update_ui(self):
-        """Executa a análise e agenda a atualização da UI."""
-        self.video_analyzer.analyze_and_compare()
-        if self.video_analyzer.processing_thread:
-            self.video_analyzer.processing_thread.join()
-
-        logger.info("Análise na thread concluída. Agendando atualização da UI.")
-        # CORREÇÃO: Usa 'self.page.invoke_rpc' que é a maneira correta de chamar uma função na thread da UI
-        # a partir de uma thread de background no Flet. É uma chamada síncrona.
-        self.setup_ui_post_analysis()
-
-    def setup_ui_post_analysis(self):
-        """Configura a UI após a conclusão da análise."""
+    async def setup_ui_post_analysis(self):
         logger.info("Configurando a UI para exibir os resultados da análise.")
         num_frames = len(self.video_analyzer.processed_frames_aluno)
         if num_frames > 0:
@@ -298,20 +277,17 @@ class KravMagaApp:
             self.playback_controls.visible = True
 
             self.status_text.value = "Análise completa! Use os controles para navegar."
-            self.update_frame_display(0)
+            await self.update_frame_display(0)
         else:
             self.status_text.value = "Erro: Não foi possível processar os vídeos."
 
-        self.page.update()
-
-    async def on_slider_change(self, e):
-        """Atualiza a exibição do frame quando o slider é movido."""
-        frame_index = int(e.control.value)
-        self.update_frame_display(frame_index)
         await self.page.update_async()
 
-    def update_frame_display(self, frame_index):
-        """Busca os frames processados e os exibe na UI."""
+    async def on_slider_change(self, e):
+        frame_index = int(e.control.value)
+        await self.update_frame_display(frame_index)
+
+    async def update_frame_display(self, frame_index):
         if not self.video_analyzer or frame_index >= len(
             self.video_analyzer.processed_frames_aluno
         ):
@@ -330,14 +306,14 @@ class KravMagaApp:
         self.img_aluno_control.visible = True
         self.img_mestre_control.visible = True
 
+        await self.page.update_async()
+
     def frame_to_base64(self, frame):
         """Converte um frame do OpenCV para uma string base64."""
         _, buffer = cv2.imencode(".png", frame)
         return base64.b64encode(buffer).decode("utf-8")
 
-    # --- LÓGICA DOS NOVOS CONTROLES DE REPRODUÇÃO ---
     async def toggle_play_pause(self, e):
-        """Inicia ou pausa a reprodução automática dos frames."""
         self.is_playing = not self.is_playing
         self.play_button.icon = (
             ft.icons.PAUSE if self.is_playing else ft.icons.PLAY_ARROW
@@ -346,9 +322,9 @@ class KravMagaApp:
 
         if self.is_playing:
             logger.info("Iniciando reprodução automática.")
-            await self.page.run_task(self.play_video_async)
+            await self.page.run_task(self.play_video_loop)
 
-    async def play_video_async(self):
+    async def play_video_loop(self):
         """Loop assíncrono para reproduzir os frames do vídeo."""
         start_index = int(self.slider_control.value)
         num_frames = len(self.video_analyzer.processed_frames_aluno)
@@ -358,8 +334,7 @@ class KravMagaApp:
                 logger.info("Reprodução interrompida pelo usuário.")
                 break
 
-            self.update_frame_display(i)
-            await self.page.update_async()
+            await self.update_frame_display(i)
             await asyncio.sleep(1 / 30)  # Simula 30 FPS.
 
         self.is_playing = False
@@ -370,21 +345,18 @@ class KravMagaApp:
     async def prev_frame(self, e):
         """Vai para o frame anterior."""
         new_index = max(0, int(self.slider_control.value) - 1)
-        self.update_frame_display(new_index)
-        await self.page.update_async()
+        await self.update_frame_display(new_index)
 
     async def next_frame(self, e):
         """Vai para o próximo frame."""
         num_frames = len(self.video_analyzer.processed_frames_aluno)
         new_index = min(num_frames - 1, int(self.slider_control.value) + 1)
-        self.update_frame_display(new_index)
-        await self.page.update_async()
+        await self.update_frame_display(new_index)
 
 
-def main(page: ft.Page):
-    """Função de entrada que o Flet chama para iniciar a aplicação."""
+async def main(page: ft.Page):
     logger.info("Iniciando a aplicação Flet.")
-    KravMagaApp(page)
+    app = KravMagaApp(page)
 
 
 if __name__ == "__main__":
