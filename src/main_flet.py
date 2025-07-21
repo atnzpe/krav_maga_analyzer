@@ -1,350 +1,267 @@
-# src/main_flet.py
+# -*- coding: utf-8 -*-
 
-import flet as ft
-import logging
-import asyncio  # Importa a biblioteca asyncio para operações assíncronas e de thread
-import os
-import cv2  # Necessário para operações com vídeo, mesmo que de forma indireta aqui.
-import numpy as np  # Necessário para manipulação de arrays, comum em processamento de vídeo.
-import tempfile  # Para lidar com arquivos temporários
-import threading  # Se houver uso de threads em segundo plano (além de asyncio.to_thread)
-import time  # Para operações de tempo, como sleeps ou contadores
-import io  # Para trabalhar com streams de bytes em memória
-import base64  # Para codificar frames de imagem para exibição no Flet
+# --------------------------------------------------------------------------------------------------
+#  Krav Maga Motion Analyzer
+#  version 1.1.0
+#  Copyright (C) 2024,
+#  開発者名 [Sujeito Programador]
+# --------------------------------------------------------------------------------------------------
 
-# IMPORTANTE: Adicione estas linhas no topo para resolver ModuleNotFoundError
-import sys
+# --------------------------------------------------------------------------------------------------
+# Importação de Bibliotecas
+# --------------------------------------------------------------------------------------------------
+import flet as ft  # Biblioteca Flet para criar a interface gráfica.
+import cv2  # Biblioteca OpenCV para converter imagens para formatos que o Flet entende.
+import base64  # Para codificar as imagens em base64 e exibi-las no Flet.
+import logging  # Para registrar logs.
+from src.video_analyzer import VideoAnalyzer  # Importa nossa classe de análise.
 
-# Adiciona o diretório raiz do projeto ao sys.path. Isso é crucial para que as importações
-# de módulos locais, como `src.utils` e `src.video_analyzer`, funcionem corretamente
-# quando o script é executado de diferentes diretórios.
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-# Importa as classes e funções necessárias dos módulos locais
-from src.utils import (
-    setup_logging,  # Função para configurar o sistema de log da aplicação.
-    get_logger,  # Função para obter uma instância do logger.
-    FeedbackManager,  # AGORA IMPORTADA DO utils.py
-    # VideoProcessor, # Mantenha ou remova conforme a necessidade real do seu projeto.
-)
-from src.video_analyzer import (
-    VideoAnalyzer,  # Importa a classe `VideoAnalyzer`, responsável por processar vídeos e detectar poses.
-)
-from src.motion_comparator import (
-    MotionComparator,  # Importa a classe MotionComparator para comparação de movimentos
+# --------------------------------------------------------------------------------------------------
+# Configuração do Logging
+# --------------------------------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# Configura o logger para este módulo
-setup_logging()
-logger = get_logger(__name__)  # Obtém o logger para o módulo atual.
-
-# Variáveis globais (ou de sessão) para armazenar os caminhos dos arquivos e dados processados.
-# Estas variáveis são acessíveis e modificáveis por qualquer função dentro do módulo.
-VIDEO_ALUNO_PATH = None  # Armazena o caminho completo para o arquivo de vídeo do aluno. Inicialmente `None`.
-VIDEO_MESTRE_PATH = None  # Armazena o caminho completo para o arquivo de vídeo do mestre. Inicialmente `None`.
-PROCESSED_FRAMES_ALUNO = (
-    []
-)  # Lista para armazenar frames processados do vídeo do aluno.
-PROCESSED_FRAMES_MESTRE = (
-    []
-)  # Lista para armazenar frames processados do vídeo do mestre.
-VIDEO_ANALYZER = (
-    VideoAnalyzer()
-)  # Instância global do VideoAnalyzer para gerenciar o processamento de vídeo e comparação.
-
-# Dicionários para controlar o estado da reprodução dos vídeos.
-# Útil para pausar/reproduzir e manter o controle do frame atual.
-VIDEO_PLAYER_STATE = {
-    "aluno": {"playing": False, "thread": None, "current_frame_index": 0},
-    "mestre": {"playing": False, "thread": None, "current_frame_index": 0},
-}
-
-# Instância do gerenciador de feedback.
-# Será inicializada corretamente dentro da função `main` com o controle `ft.Text`.
-feedback_manager = FeedbackManager()  # Inicializa sem o controle de texto aqui.
-
-# Instância da página Flet (será definida na função main)
-page_instance = None  # Variável global para armazenar a instância da página Flet.
+# --------------------------------------------------------------------------------------------------
+# Classe Principal da Aplicação Flet
+# --------------------------------------------------------------------------------------------------
 
 
-async def pick_file_result_aluno(e: ft.FilePickerResultEvent):
+class KravMagaApp:
     """
-    Manipula o resultado da seleção de arquivo para o vídeo do aluno.
-
-    Args:
-        e (ft.FilePickerResultEvent): Evento de resultado do seletor de arquivos.
+    Classe principal que constrói e gerencia a interface do usuário com Flet.
     """
-    global page_instance
-    if e.files:
-        selected_file = e.files[0]
-        logger.info(f"Arquivo do aluno selecionado: {selected_file.name}")
-        feedback_manager.update_feedback(
-            page_instance, f"Carregando vídeo do aluno: {selected_file.name}..."
-        )
-        try:
-            # Usa asyncio.to_thread para executar a leitura do arquivo (operação bloqueante)
-            # em um thread separado, evitando que a UI congele.
-            # page_instance.run_task() espera uma coroutine, e asyncio.to_thread retorna uma.
-            file_bytes = await page_instance.run_task(
-                lambda: asyncio.to_thread(lambda: open(selected_file.path, "rb").read())
-            )
-            logger.info("Vídeo do aluno lido com sucesso.")
-            feedback_manager.update_feedback(
-                page_instance, "Vídeo do aluno carregado com sucesso!"
-            )
-            # Aqui você pode processar 'file_bytes'
-            # Exemplo: Salvar temporariamente ou passar para o processador de vídeo
-            # video_processor.load_video_aluno(file_bytes) # Exemplo de uso
-        except Exception as ex:
-            logger.error(f"Erro ao ler vídeo do aluno: {ex}")
-            feedback_manager.update_feedback(
-                page_instance, f"Erro ao carregar vídeo do aluno: '{ex}'", is_error=True
-            )
-    else:
-        logger.info("Seleção de arquivo do aluno cancelada.")
-        feedback_manager.update_feedback(
-            page_instance, "Seleção de vídeo do aluno cancelada."
-        )
-    page_instance.update()  # Atualiza a página para exibir o feedback
 
+    def __init__(self, page: ft.Page):
+        """
+        Inicializador da aplicação.
 
-async def pick_file_result_mestre(e: ft.FilePickerResultEvent):
-    """
-    Manipula o resultado da seleção de arquivo para o vídeo do mestre.
+        Args:
+            page (ft.Page): O objeto da página principal do Flet.
+        """
+        self.page = page
+        self.setup_page()  # Configurações iniciais da janela/página.
 
-    Args:
-        e (ft.FilePickerResultEvent): Evento de resultado do seletor de arquivos.
-    """
-    global page_instance
-    if e.files:
-        selected_file = e.files[0]
-        logger.info(f"Arquivo do mestre selecionado: {selected_file.name}")
-        feedback_manager.update_feedback(
-            page_instance, f"Carregando vídeo do mestre: {selected_file.name}..."
+        self.video_analyzer = None  # O analisador será criado após o upload dos vídeos.
+        self.video_path_aluno = None  # Caminho do vídeo do aluno.
+        self.video_path_mestre = None  # Caminho do vídeo do mestre.
+
+        # --- Controles da UI (Widgets do Flet) ---
+        # Pickers para seleção de arquivos.
+        self.file_picker_aluno = ft.FilePicker(on_result=self.on_file_aluno_selected)
+        self.file_picker_mestre = ft.FilePicker(on_result=self.on_file_mestre_selected)
+        self.page.overlay.extend([self.file_picker_aluno, self.file_picker_mestre])
+
+        # Exibidores de imagem para os vídeos.
+        self.image_aluno = ft.Image(width=400, height=400)
+        self.image_mestre = ft.Image(width=400, height=400)
+
+        # Slider para navegar pelos frames do vídeo.
+        self.slider = ft.Slider(
+            min=0,
+            max=100,
+            divisions=100,
+            label="{value}%",
+            on_change=self.on_slider_change,
+            visible=False,
         )
-        try:
-            # Usa asyncio.to_thread para executar a leitura do arquivo (operação bloqueante)
-            # em um thread separado, evitando que a UI congele.
-            # page_instance.run_task() espera uma coroutine, e asyncio.to_thread retorna uma.
-            file_bytes = await page_instance.run_task(
-                lambda: asyncio.to_thread(lambda: open(selected_file.path, "rb").read())
-            )
-            logger.info("Vídeo do mestre lido com sucesso.")
-            feedback_manager.update_feedback(
-                page_instance, "Vídeo do mestre carregado com sucesso!"
-            )
-            # Aqui você pode processar 'file_bytes'
-            # Exemplo: Salvar temporariamente ou passar para o processador de vídeo
-            # video_processor.load_video_mestre(file_bytes) # Exemplo de uso
-        except Exception as ex:
-            logger.error(f"Erro ao ler vídeo do mestre: {ex}")
-            feedback_manager.update_feedback(
-                page_instance,
-                f"Erro ao carregar vídeo do mestre: '{ex}'",
-                is_error=True,
-            )
-    else:
-        logger.info("Seleção de arquivo do mestre cancelada.")
-        feedback_manager.update_feedback(
-            page_instance, "Seleção de vídeo do mestre cancelada."
+
+        # Botões e textos informativos.
+        self.analyze_button = ft.Button(
+            text="Analisar Movimentos", on_click=self.analyze, disabled=True
         )
-    page_instance.update()  # Atualiza a página para exibir o feedback
+        self.status_text = ft.Text("Por favor, carregue o vídeo do aluno e do mestre.")
+
+        # --- NOVOS CONTROLES PARA FEEDBACK ---
+        self.score_text = ft.Text(
+            "Pontuação: -",
+            size=24,
+            weight=ft.FontWeight.BOLD,
+            color=ft.colors.WHITE,
+            visible=False,
+        )
+        self.feedback_text = ft.Text(
+            "Dica: -", size=18, color=ft.colors.AMBER, visible=False
+        )
+        # ------------------------------------
+
+        self.build_layout()  # Monta a UI.
+        logging.info("Aplicação Flet inicializada e layout construído.")
+
+    def setup_page(self):
+        """Configura as propriedades da página principal."""
+        self.page.title = "Analisador de Movimentos de Krav Maga"
+        self.page.vertical_alignment = ft.MainAxisAlignment.CENTER
+        self.page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
+        self.page.theme_mode = (
+            ft.ThemeMode.DARK
+        )  # Zen: "A escuridão na borda da cidade."
+
+    def build_layout(self):
+        """Constrói o layout da interface com os controles Flet."""
+        logging.info("Construindo o layout da UI.")
+        # O layout é organizado em Colunas e Linhas para posicionar os elementos.
+        self.page.add(
+            ft.Column(
+                [
+                    ft.Text(
+                        "Analisador de Movimentos de Krav Maga",
+                        size=32,
+                        weight=ft.FontWeight.BOLD,
+                    ),
+                    self.status_text,
+                    ft.Row(
+                        [
+                            ft.ElevatedButton(
+                                "Carregar Vídeo do Aluno",
+                                on_click=lambda _: self.file_picker_aluno.pick_files(
+                                    allow_multiple=False, allowed_extensions=["mp4"]
+                                ),
+                            ),
+                            ft.ElevatedButton(
+                                "Carregar Vídeo do Mestre",
+                                on_click=lambda _: self.file_picker_mestre.pick_files(
+                                    allow_multiple=False, allowed_extensions=["mp4"]
+                                ),
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.CENTER,
+                    ),
+                    self.analyze_button,
+                    ft.Row(
+                        [
+                            ft.Column([ft.Text("Aluno"), self.image_aluno]),
+                            ft.Column([ft.Text("Mestre"), self.image_mestre]),
+                        ],
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        vertical_alignment=ft.CrossAxisAlignment.START,
+                    ),
+                    # --- Adicionando novos widgets de feedback ao layout ---
+                    self.score_text,
+                    self.feedback_text,
+                    # ----------------------------------------------------
+                    self.slider,
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=20,
+            )
+        )
+        self.page.update()
+
+    def on_file_aluno_selected(self, e: ft.FilePickerResultEvent):
+        """Callback executado quando o arquivo do aluno é selecionado."""
+        if e.files:
+            self.video_path_aluno = e.files[0].path
+            self.status_text.value = f"Aluno: {e.files[0].name}"
+            logging.info(f"Vídeo do aluno selecionado: {self.video_path_aluno}")
+            self.check_files_loaded()
+        self.page.update()
+
+    def on_file_mestre_selected(self, e: ft.FilePickerResultEvent):
+        """Callback executado quando o arquivo do mestre é selecionado."""
+        if e.files:
+            self.video_path_mestre = e.files[0].path
+            self.status_text.value += f" | Mestre: {e.files[0].name}"
+            logging.info(f"Vídeo do mestre selecionado: {self.video_path_mestre}")
+            self.check_files_loaded()
+        self.page.update()
+
+    def check_files_loaded(self):
+        """Verifica se ambos os vídeos foram carregados e habilita o botão de análise."""
+        if self.video_path_aluno and self.video_path_mestre:
+            self.analyze_button.disabled = False
+            self.status_text.value = "Vídeos prontos! Clique em 'Analisar Movimentos'."
+            logging.info(
+                "Ambos os vídeos foram carregados. Botão de análise habilitado."
+            )
+        self.page.update()
+
+    def analyze(self, e):
+        """Inicia o processo de análise quando o botão é clicado."""
+        logging.info("Botão de análise clicado.")
+        self.status_text.value = "Analisando... por favor, aguarde."
+        self.analyze_button.disabled = True
+        self.page.update()
+
+        # Instancia e inicia o analisador de vídeo.
+        self.video_analyzer = VideoAnalyzer(
+            self.video_path_aluno, self.video_path_mestre
+        )
+        self.video_analyzer.start_analysis()
+
+        # Verifica periodicamente se a análise terminou.
+        self.page.run_thread(self.wait_for_analysis_completion)
+
+    def wait_for_analysis_completion(self):
+        """Espera a thread de análise terminar e então configura a UI pós-análise."""
+        self.video_analyzer.processing_thread.join()  # Espera a thread finalizar.
+        logging.info("Análise concluída. Configurando o slider e a visualização.")
+
+        # Configura o slider com o número correto de frames.
+        frame_count = self.video_analyzer.get_frame_count()
+        if frame_count > 0:
+            self.slider.max = frame_count - 1
+            self.slider.divisions = frame_count - 1
+            self.slider.visible = True
+            # --- Torna os widgets de feedback visíveis ---
+            self.score_text.visible = True
+            self.feedback_text.visible = True
+            # ------------------------------------------
+            self.status_text.value = "Análise completa! Use o slider para navegar."
+            self.update_frame_display(0)  # Exibe o primeiro frame.
+        else:
+            self.status_text.value = "Erro: Não foi possível processar os vídeos."
+
+        self.page.update()
+
+    def on_slider_change(self, e):
+        """Callback executado quando o valor do slider muda."""
+        frame_index = int(e.control.value)
+        logging.debug(f"Slider movido para o frame {frame_index}.")
+        self.update_frame_display(frame_index)
+
+    def update_frame_display(self, frame_index):
+        """Atualiza as imagens e os textos de feedback na tela."""
+        if self.video_analyzer:
+            # Pega todos os dados para o frame atual.
+            frame_aluno, frame_mestre, score, feedback = (
+                self.video_analyzer.get_data_at_frame(frame_index)
+            )
+
+            if frame_aluno is not None and frame_mestre is not None:
+                # Converte os frames (arrays numpy) para strings base64 que o Flet pode exibir.
+                self.image_aluno.src_base64 = self.frame_to_base64(frame_aluno)
+                self.image_mestre.src_base64 = self.frame_to_base64(frame_mestre)
+
+                # --- ATUALIZA A UI COM OS NOVOS DADOS ---
+                self.score_text.value = f"Pontuação: {score:.2f}%"
+                self.feedback_text.value = f"Dica: {feedback}"
+                # Muda a cor da pontuação com base no valor para um feedback visual rápido.
+                if score >= 85:
+                    self.score_text.color = ft.colors.GREEN
+                elif score >= 60:
+                    self.score_text.color = ft.colors.ORANGE
+                else:
+                    self.score_text.color = ft.colors.RED
+                # -----------------------------------------
+
+                self.page.update()
+
+    def frame_to_base64(self, frame):
+        """Converte um frame OpenCV para uma string base64."""
+        # Codifica o frame para o formato JPEG em memória.
+        _, buffer = cv2.imencode(".jpg", frame)
+        # Converte os bytes do buffer para uma string base64.
+        return base64.b64encode(buffer).decode("utf-8")
 
 
 def main(page: ft.Page):
-    """
-    Função principal da aplicação Flet.
-    Define a interface do usuário e a lógica de interação.
-    """
-    global page_instance  # Declara que estamos usando a variável global
-    page_instance = page  # Atribui a instância da página à variável global
-
-    page.title = "Analisador de Movimentos de Krav Maga"
-    page.vertical_alignment = ft.MainAxisAlignment.CENTER
-    page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
-    page.window_width = 1200
-    page.window_height = 800
-    page.bgcolor = ft.colors.BLUE_GREY_50
-    page.theme_mode = ft.ThemeMode.LIGHT  # Modo claro
-    logger.info("Iniciando a aplicação Flet e configurando a página.")
-
-    # Inicialização do FeedbackManager com o controle de texto da UI
-    # Isso garante que o FeedbackManager tenha acesso ao controle de texto do Flet
-    # criado dentro da função main.
-    feedback_text_container = ft.Text(
-        value="Bem-vindo ao Analisador de Movimentos de Krav Maga!",
-        color=ft.colors.BLACK,
-        size=16,
-        weight=ft.FontWeight.NORMAL,
-        text_align=ft.TextAlign.CENTER,
-        width=800,  # Largura para o container de feedback
-        height=100,  # Altura para o container de feedback
-        max_lines=5,
-        overflow=ft.TextOverflow.ELLIPSIS,
-    )
-    # Define o controle de feedback na instância global do FeedbackManager
-    feedback_manager.set_feedback_control(feedback_text_container)
-    logger.info("Controle de feedback na UI associado ao FeedbackManager.")
-
-    # Criar instâncias do FilePicker
-    file_picker_aluno = ft.FilePicker(on_result=pick_file_result_aluno)
-    file_picker_mestre = ft.FilePicker(on_result=pick_file_result_mestre)
-
-    # Adicionar FilePicker à sobreposição da página
-    page.overlay.append(file_picker_aluno)
-    page.overlay.append(file_picker_mestre)
-    logger.info("FilePickers adicionados à sobreposição da página.")
-
-    # Botões para selecionar arquivos
-    btn_select_aluno = ft.ElevatedButton(
-        "Selecionar Vídeo do Aluno",
-        icon=ft.icons.UPLOAD_FILE,
-        on_click=lambda _: file_picker_aluno.pick_files(
-            allow_multiple=False, allowed_extensions=["mp4", "avi", "mov", "mkv"]
-        ),
-    )
-    logger.info("Botão 'Selecionar Vídeo do Aluno' criado.")
-
-    btn_select_mestre = ft.ElevatedButton(
-        "Selecionar Vídeo do Mestre",
-        icon=ft.icons.UPLOAD_FILE,
-        on_click=lambda _: file_picker_mestre.pick_files(
-            allow_multiple=False, allowed_extensions=["mp4", "avi", "mov", "mkv"]
-        ),
-    )
-    logger.info("Botão 'Selecionar Vídeo do Mestre' criado.")
-
-    # Botão para iniciar análise
-    btn_start_analysis = ft.ElevatedButton(
-        "Iniciar Análise",
-        icon=ft.icons.ANALYTICS,
-        on_click=lambda _: feedback_manager.update_feedback(
-            page, "Análise iniciada (funcionalidade em desenvolvimento)..."
-        ),
-        disabled=True,  # Desabilitado até que os vídeos sejam carregados
-    )
-    logger.info("Botão 'Iniciar Análise' criado (desabilitado).")
-
-    # Layout principal da UI
-    page.add(
-        ft.Column(
-            [
-                ft.AppBar(
-                    title=ft.Text("Krav Maga Analyzer", color=ft.colors.WHITE),
-                    bgcolor=ft.colors.BLUE_GREY_700,
-                    center_title=True,
-                ),
-                ft.Row(
-                    [
-                        ft.Container(
-                            content=ft.Column(
-                                [
-                                    ft.Text(
-                                        "Vídeo do Aluno",
-                                        size=20,
-                                        weight=ft.FontWeight.BOLD,
-                                    ),
-                                    ft.Container(
-                                        content=ft.Image(
-                                            src="https://via.placeholder.com/320x240?text=Video+Aluno",
-                                            fit=ft.ImageFit.CONTAIN,
-                                            border_radius=ft.border_radius.all(10),
-                                        ),
-                                        width=320,
-                                        height=240,
-                                        bgcolor=ft.colors.GREY_300,
-                                        alignment=ft.alignment.center,
-                                        border_radius=ft.border_radius.all(10),
-                                    ),
-                                    btn_select_aluno,
-                                ],
-                                alignment=ft.MainAxisAlignment.CENTER,
-                                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                                spacing=10,
-                            ),
-                            padding=20,
-                            margin=10,
-                            bgcolor=ft.colors.WHITE,
-                            border_radius=ft.border_radius.all(15),
-                            shadow=ft.BoxShadow(
-                                spread_radius=1,
-                                blur_radius=10,
-                                color=ft.colors.BLACK_26,
-                                offset=ft.Offset(0, 0),
-                            ),
-                        ),
-                        ft.Container(
-                            content=ft.Column(
-                                [
-                                    ft.Text(
-                                        "Vídeo do Mestre",
-                                        size=20,
-                                        weight=ft.FontWeight.BOLD,
-                                    ),
-                                    ft.Container(
-                                        content=ft.Image(
-                                            src="https://via.placeholder.com/320x240?text=Video+Mestre",
-                                            fit=ft.ImageFit.CONTAIN,
-                                            border_radius=ft.border_radius.all(10),
-                                        ),
-                                        width=320,
-                                        height=240,
-                                        bgcolor=ft.colors.GREY_300,
-                                        alignment=ft.alignment.center,
-                                        border_radius=ft.border_radius.all(10),
-                                    ),
-                                    btn_select_mestre,
-                                ],
-                                alignment=ft.MainAxisAlignment.CENTER,
-                                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                                spacing=10,
-                            ),
-                            padding=20,
-                            margin=10,
-                            bgcolor=ft.colors.WHITE,
-                            border_radius=ft.border_radius.all(15),
-                            shadow=ft.BoxShadow(
-                                spread_radius=1,
-                                blur_radius=10,
-                                color=ft.colors.BLACK_26,
-                                offset=ft.Offset(0, 0),
-                            ),
-                        ),
-                    ],
-                    alignment=ft.MainAxisAlignment.CENTER,
-                    spacing=30,
-                ),
-                ft.Container(
-                    content=feedback_text_container,  # Usa o controle de texto para feedback
-                    alignment=ft.alignment.center,
-                    padding=10,
-                    margin=ft.margin.only(top=20),
-                    width=800,
-                    height=100,
-                    bgcolor=ft.colors.WHITE,
-                    border_radius=ft.border_radius.all(10),
-                    shadow=ft.BoxShadow(
-                        spread_radius=1,
-                        blur_radius=5,
-                        color=ft.colors.BLACK_12,
-                        offset=ft.Offset(0, 0),
-                    ),
-                ),
-                ft.Container(
-                    content=btn_start_analysis,
-                    alignment=ft.alignment.center,
-                    padding=10,
-                    margin=ft.margin.only(top=20),
-                ),
-            ],
-            alignment=ft.MainAxisAlignment.CENTER,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=20,
-        )
-    )
-    page.update()  # Atualiza a página para exibir todos os elementos da UI
-    logger.info("Elementos da UI Flet adicionados e página atualizada.")
+    """Função principal que inicia a aplicação Flet."""
+    KravMagaApp(page)
 
 
+# Ponto de entrada da aplicação.
 if __name__ == "__main__":
     ft.app(target=main)

@@ -1,213 +1,244 @@
-# src/motion_comparator.py
+# -*- coding: utf-8 -*-
 
+# --------------------------------------------------------------------------------------------------
+#  Krav Maga Motion Analyzer
+#  version 1.1.0
+#  Copyright (C) 2024,
+#  Gleyson Atanazio [Sujeito Programador]
+# --------------------------------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------------------------------
+# Importação de Bibliotecas
+# --------------------------------------------------------------------------------------------------
+
+# Importa a classe abstrata de base para criar classes abstratas.
+from abc import ABC, abstractmethod
+# Importa a biblioteca logging para registrar eventos e mensagens.
 import logging
+# Importa a biblioteca NumPy para operações numéricas, especialmente com arrays.
 import numpy as np
-import mediapipe as mp  # Importado para usar mp.solutions.pose.PoseLandmark
-from src.utils import (
-    get_logger,
-    calculate_angle,
-)  # Importa get_logger e calculate_angle
+# Importa a função de similaridade de cosseno do scikit-learn para comparar vetores.
+from sklearn.metrics.pairwise import cosine_similarity
 
-# Inicializa o logger para este módulo.
-# Usar get_logger(__name__) garante que o logger é configurado corretamente
-# e que as mensagens de log incluem o nome do módulo.
-logger = get_logger(__name__)
+# --------------------------------------------------------------------------------------------------
+# Configuração do Logging
+# --------------------------------------------------------------------------------------------------
 
+# Configura o logging para exibir mensagens a partir do nível INFO.
+# O formato da mensagem inclui a hora, o nível do log e a mensagem.
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
-class MotionComparator:
+# --------------------------------------------------------------------------------------------------
+# Classe Base para Comparação de Movimento
+# --------------------------------------------------------------------------------------------------
+
+class MotionComparatorBase(ABC):
     """
-    Classe responsável por comparar os movimentos do aluno com os do mestre
-    com base nos dados de landmarks de pose.
+    Classe base abstrata para comparadores de movimento.
+    Define a interface que todos os comparadores concretos devem seguir.
+    Isso garante a extensibilidade e a manutenção do código (Zen of Python: "Belo é melhor que feio").
+    """
+    @abstractmethod
+    def compare_poses(self, landmarks_aluno, landmarks_mestre):
+        """
+        Método abstrato para comparar as poses de um aluno e de um mestre.
 
-    Esta classe utiliza os landmarks 3D fornecidos pelo MediaPipe para calcular
-    e comparar ângulos corporais chave, fornecendo feedback sobre a execução.
+        Args:
+            landmarks_aluno (list): Lista de landmarks (pontos de referência) do aluno.
+            landmarks_mestre (list): Lista de landmarks (pontos de referência) do mestre.
+
+        Returns:
+            tuple: Uma tupla contendo a pontuação de similaridade e o feedback textual.
+        """
+        pass
+
+# --------------------------------------------------------------------------------------------------
+# Implementação Concreta do Comparador de Movimento
+# --------------------------------------------------------------------------------------------------
+
+class MotionComparator(MotionComparatorBase):
+    """
+    Classe responsável por comparar os movimentos entre o aluno e o mestre.
+    Calcula ângulos das articulações e fornece uma pontuação de similaridade e feedback.
     """
 
     def __init__(self):
         """
-        Inicializa o MotionComparator.
-        Define os landmarks e as conexões que serão usados para calcular os ângulos chave
-        relevantes para as técnicas de Krav Magá.
+        Inicializador da classe MotionComparator.
+        Define os mapeamentos das articulações que serão analisadas.
         """
-        logger.info("Inicializando MotionComparator.")
-
-        # Dicionário que mapeia nomes de partes do corpo para os índices dos landmarks do MediaPipe.
-        # Os nomes dos landmarks são definidos pelo MediaPipe (ex: mp.solutions.pose.PoseLandmark.LEFT_SHOULDER.value)
-        # É crucial usar os índices corretos conforme a documentação do MediaPipe.
-        # Estes são os índices numéricos das 33 landmarks do MediaPipe.
-        # Para facilitar a leitura, usamos os nomes das enumerações do MediaPipe, mas ao usar
-        # o landmarks_data (que é uma lista), acessaremos por índice.
-        # Você pode consultar a lista completa em:
-        # https://google.github.io/mediapipe/solutions/pose.html#pose-landmark-model
-        self.KEY_ANGLES = {
-            "LEFT_ELBOW_ANGLE": ("LEFT_SHOULDER", "LEFT_ELBOW", "LEFT_WRIST"),
-            "RIGHT_ELBOW_ANGLE": ("RIGHT_SHOULDER", "RIGHT_ELBOW", "RIGHT_WRIST"),
-            "LEFT_SHOULDER_ANGLE": ("LEFT_HIP", "LEFT_SHOULDER", "LEFT_ELBOW"),
-            "RIGHT_SHOULDER_ANGLE": ("RIGHT_HIP", "RIGHT_SHOULDER", "RIGHT_ELBOW"),
-            "LEFT_KNEE_ANGLE": ("LEFT_HIP", "LEFT_KNEE", "LEFT_ANKLE"),
-            "RIGHT_KNEE_ANGLE": ("RIGHT_HIP", "RIGHT_KNEE", "RIGHT_ANKLE"),
-            "LEFT_HIP_ANGLE": ("LEFT_SHOULDER", "LEFT_HIP", "LEFT_KNEE"),
-            "RIGHT_HIP_ANGLE": ("RIGHT_SHOULDER", "RIGHT_HIP", "RIGHT_KNEE"),
-            # Adicione mais ângulos conforme a necessidade para a análise de Krav Magá
-            # Ex: ângulos do tronco, postura, etc.
+        # Mapeamento de articulações e os landmarks correspondentes para cálculo dos ângulos.
+        # A ordem é [ponto_central, ponto_adjacente_1, ponto_adjacente_2].
+        self.angle_definitions = {
+            'cotovelo_direito': (14, 12, 16),
+            'cotovelo_esquedo': (13, 11, 15),
+            'ombro_direito': (12, 14, 24),
+            'ombro_esquedo': (11, 13, 23),
+            'quadril_direito': (24, 26, 22),
+            'quadril_esquedo': (23, 25, 21),
+            'joelho_direito': (26, 24, 28),
+            'joelho_esquedo': (25, 23, 27)
         }
+        logging.info("MotionComparator inicializado com definições de ângulo.")
 
-        # Mapeamento de nomes de landmarks para índices (para facilitar o acesso na lista `landmarks_data`)
-        # Importa PoseLandmark para mapear nomes para índices.
-        # Isso garante que estamos usando os índices corretos do MediaPipe.
-        self.landmark_indices = {
-            "NOSE": mp.solutions.pose.PoseLandmark.NOSE.value,
-            "LEFT_SHOULDER": mp.solutions.pose.PoseLandmark.LEFT_SHOULDER.value,
-            "RIGHT_SHOULDER": mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER.value,
-            "LEFT_ELBOW": mp.solutions.pose.PoseLandmark.LEFT_ELBOW.value,
-            "RIGHT_ELBOW": mp.solutions.pose.PoseLandmark.RIGHT_ELBOW.value,
-            "LEFT_WRIST": mp.solutions.pose.PoseLandmark.LEFT_WRIST.value,
-            "RIGHT_WRIST": mp.solutions.pose.PoseLandmark.RIGHT_WRIST.value,
-            "LEFT_HIP": mp.solutions.pose.PoseLandmark.LEFT_HIP.value,
-            "RIGHT_HIP": mp.solutions.pose.PoseLandmark.RIGHT_HIP.value,
-            "LEFT_KNEE": mp.solutions.pose.PoseLandmark.LEFT_KNEE.value,
-            "RIGHT_KNEE": mp.solutions.pose.PoseLandmark.RIGHT_KNEE.value,
-            "LEFT_ANKLE": mp.solutions.pose.PoseLandmark.LEFT_ANKLE.value,
-            "RIGHT_ANKLE": mp.solutions.pose.PoseLandmark.RIGHT_ANKLE.value,
-            # ... adicione outros que forem relevantes
-        }
-
-        logger.info("MotionComparator inicializado.")
-        logger.info(
-            f"Ângulos chave para comparação definidos: {list(self.KEY_ANGLES.keys())}"
-        )
-
-    def _get_landmark_coords(self, landmarks_data: list, name: str) -> dict:
+    def calculate_angle(self, landmarks, p1_idx, p2_idx, p3_idx):
         """
-        Retorna as coordenadas (x, y, z) e visibilidade de um landmark pelo nome.
-        Args:
-            landmarks_data (list): A lista de dicionários de landmarks de um frame.
-            name (str): O nome do landmark (ex: "LEFT_SHOULDER").
-        Returns:
-            dict: Um dicionário com 'x', 'y', 'z' e 'visibility' do landmark.
-        Raises:
-            ValueError: Se o landmark não for encontrado ou os dados forem inválidos.
-        """
-        idx = self.landmark_indices.get(name)
-        if idx is None or idx >= len(landmarks_data):
-            # Isso pode acontecer se a detecção de pose falhar completamente em um frame
-            # ou se o landmark específico não for detectado.
-            # Retorna um dicionário com valores padrao ou lança um erro, dependendo da robustez desejada.
-            # Para comparação, retornar None ou um dict inválido levará a erros, então é melhor levantar.
-            raise ValueError(
-                f"Landmark '{name}' (índice {idx}) não encontrado ou fora dos limites em landmarks_data de tamanho {len(landmarks_data)}."
-            )
-        return landmarks_data[idx]
-
-    def compare_movements(
-        self,
-        aluno_landmarks_history: list[list],
-        mestre_landmarks_history: list[list],
-    ) -> tuple[list, list]:
-        """
-        Compara as sequências de movimentos do aluno e do mestre frame a frame.
+        Calcula o ângulo entre três pontos (landmarks).
 
         Args:
-            aluno_landmarks_history (list[list]): Lista de listas de landmarks do aluno,
-                                                    onde cada sublista representa um frame.
-            mestre_landmarks_history (list[list]): Lista de listas de landmarks do mestre.
+            landmarks (list): A lista de landmarks da pose.
+            p1_idx (int): Índice do ponto que será o vértice do ângulo.
+            p2_idx (int): Índice do primeiro ponto adjacente.
+            p3_idx (int): Índice do segundo ponto adjacente.
 
         Returns:
-            tuple[list, list]: Uma tupla contendo:
-                - lista_comparacao_raw (list): Resultados detalhados da comparação frame a frame.
-                - feedback_text (list): Feedback textual gerado.
+            float: O ângulo calculado em graus. Retorna 0.0 se os landmarks não forem visíveis.
         """
-        logger.info("Iniciando a comparação de movimentos...")
-        lista_comparacao_raw = []
-        feedback_text = []
+        try:
+            # Obtém as coordenadas (x, y) de cada landmark a partir da lista.
+            p1 = np.array([landmarks[p1_idx].x, landmarks[p1_idx].y])
+            p2 = np.array([landmarks[p2_idx].x, landmarks[p2_idx].y])
+            p3 = np.array([landmarks[p3_idx].x, landmarks[p3_idx].y])
 
-        # Usar o número mínimo de frames para evitar IndexError se um vídeo for mais curto
-        min_frames = min(len(aluno_landmarks_history), len(mestre_landmarks_history))
-        logger.info(f"Comparando {min_frames} frames.")
+            # Cria os vetores a partir do ponto vértice (p1).
+            vector1 = p2 - p1
+            vector2 = p3 - p1
 
-        for i in range(min_frames):
-            aluno_frame_landmarks = aluno_landmarks_history[i]
-            mestre_frame_landmarks = mestre_landmarks_history[i]
+            # Calcula o produto escalar dos dois vetores.
+            dot_product = np.dot(vector1, vector2)
+            # Calcula a magnitude (norma) de cada vetor.
+            norm_vector1 = np.linalg.norm(vector1)
+            norm_vector2 = np.linalg.norm(vector2)
 
-            frame_comparison = {"frame": i + 1, "angles_diff": {}}
-            frame_feedback = []
+            # Calcula o cosseno do ângulo. Para evitar divisão por zero, verifica as normas.
+            if norm_vector1 == 0 or norm_vector2 == 0:
+                return 0.0
+            
+            cosine_angle = dot_product / (norm_vector1 * norm_vector2)
+            
+            # Garante que o valor do cosseno esteja no intervalo [-1, 1] para evitar erros de domínio.
+            cosine_angle = np.clip(cosine_angle, -1.0, 1.0)
+            
+            # Calcula o ângulo em radianos usando o arco cosseno.
+            angle_rad = np.arccos(cosine_angle)
+            # Converte o ângulo de radianos para graus.
+            angle_deg = np.degrees(angle_rad)
 
-            # Verifica se os landmarks para o frame atual são válidos (não None)
-            if aluno_frame_landmarks is None or mestre_frame_landmarks is None:
-                err_msg = f"Frame {i+1}: Um ou ambos os vídeos não têm landmarks detectados. Pulando este frame."
-                frame_feedback.append(err_msg)
-                logger.warning(err_msg)
-                lista_comparacao_raw.append(
-                    frame_comparison
-                )  # Adiciona o frame, mesmo que vazio
-                continue  # Pula para o próximo frame
+            return angle_deg
 
-            for angle_name, (p1_name, p2_name, p3_name) in self.KEY_ANGLES.items():
-                try:
-                    # Obtém as coordenadas dos landmarks para o aluno
-                    aluno_p1 = self._get_landmark_coords(aluno_frame_landmarks, p1_name)
-                    aluno_p2 = self._get_landmark_coords(aluno_frame_landmarks, p2_name)
-                    aluno_p3 = self._get_landmark_coords(aluno_frame_landmarks, p3_name)
+        except (IndexError, TypeError) as e:
+            # Captura exceções se os landmarks não estiverem disponíveis e registra um erro.
+            logging.error(f"Erro ao calcular ângulo para os índices {p1_idx, p2_idx, p3_idx}: {e}")
+            return 0.0
 
-                    # Calcula o ângulo para o aluno
-                    aluno_angle = calculate_angle(aluno_p1, aluno_p2, aluno_p3)
+    def get_all_angles(self, landmarks):
+        """
+        Calcula todos os ângulos definidos para uma determinada pose.
 
-                    # Obtém as coordenadas dos landmarks para o mestre
-                    mestre_p1 = self._get_landmark_coords(
-                        mestre_frame_landmarks, p1_name
-                    )
-                    mestre_p2 = self._get_landmark_coords(
-                        mestre_frame_landmarks, p2_name
-                    )
-                    mestre_p3 = self._get_landmark_coords(
-                        mestre_frame_landmarks, p3_name
-                    )
+        Args:
+            landmarks (list): A lista de landmarks da pose.
 
-                    # Calcula o ângulo para o mestre
-                    mestre_angle = calculate_angle(mestre_p1, mestre_p2, mestre_p3)
+        Returns:
+            dict: Um dicionário onde as chaves são os nomes das articulações e os valores são os ângulos.
+        """
+        if not landmarks:
+            # Se não houver landmarks, retorna um dicionário vazio.
+            return {}
 
-                    # Calcula a diferença absoluta entre os ângulos
-                    diff = abs(aluno_angle - mestre_angle)
-                    frame_comparison["angles_diff"][angle_name] = diff
+        angles = {}
+        # Itera sobre as definições de ângulo para calcular cada um.
+        for name, (p1, p2, p3) in self.angle_definitions.items():
+            angles[name] = self.calculate_angle(landmarks, p1, p2, p3)
+        
+        logging.debug(f"Ângulos calculados: {angles}")
+        return angles
 
-                    # Lógica de feedback: ajustável conforme a necessidade
-                    # Esta é uma regra de negócio que pode ser medida e refinada.
-                    # Thresholds de exemplo, que devem ser ajustados com base na experiência real de Krav Magá.
-                    if diff > 20:  # Grande diferença
-                        feedback_msg = f"Frame {i+1}: Grande diferença no {angle_name.replace('_', ' ').lower()}! Aluno: {aluno_angle:.1f}°, Mestre: {mestre_angle:.1f}°."
-                        frame_feedback.append(feedback_msg)
-                        logger.info(f"Feedback gerado: {feedback_msg}")
-                    elif diff > 10:  # Média diferença
-                        feedback_msg = f"Frame {i+1}: Pequena diferença no {angle_name.replace('_', ' ').lower()}. Aluno: {aluno_angle:.1f}°, Mestre: {mestre_angle:.1f}°."
-                        frame_feedback.append(feedback_msg)
-                        logger.info(f"Feedback gerado: {feedback_msg}")
-                    # Se a diferença for menor que 10, pode ser considerada aceitável e não gera feedback.
+    def compare_poses(self, landmarks_aluno, landmarks_mestre):
+        """
+        Compara as poses do aluno e do mestre, calculando uma pontuação de similaridade e feedback.
 
-                except ValueError as ve:
-                    # Isso captura erros se um landmark específico não for encontrado,
-                    # o que pode acontecer se a detecção de pose falhar para um ponto específico.
-                    err_msg = f"Frame {i+1}: Erro ao calcular {angle_name}: {ve}"
-                    frame_feedback.append(err_msg)
-                    logger.warning(err_msg)
-                except Exception as ex:
-                    # Captura outras exceções inesperadas
-                    err_msg = (
-                        f"Frame {i+1}: Erro inesperado ao calcular {angle_name}: {ex}"
-                    )
-                    frame_feedback.append(err_msg)
-                    logger.error(err_msg, exc_info=True)
+        Args:
+            landmarks_aluno (list): Lista de landmarks do aluno.
+            landmarks_mestre (list): Lista de landmarks do mestre.
 
-            lista_comparacao_raw.append(frame_comparison)
-            if frame_feedback:
-                feedback_text.extend(
-                    frame_feedback
-                )  # Adiciona todos os feedbacks do frame
+        Returns:
+            tuple: (float, str) - Pontuação de similaridade (0 a 100) e feedback textual.
+                   Retorna (0.0, "Analisando...") se alguma pose for inválida.
+        """
+        # Verifica se os landmarks de ambos são válidos.
+        if not landmarks_aluno or not landmarks_mestre:
+            logging.warning("Comparação de pose pulada: landmarks de aluno ou mestre ausentes.")
+            return 0.0, "Analisando..."
 
-        if not feedback_text:
-            feedback_text.append(
-                "Nenhuma diferença significativa detectada. Boa execução!"
-            )
-            logger.info("Nenhuma diferença significativa geral detectada.")
+        # Calcula todos os ângulos para o aluno e para o mestre.
+        angles_aluno = self.get_all_angles(landmarks_aluno)
+        angles_mestre = self.get_all_angles(landmarks_mestre)
 
-        logger.info("Comparação de movimentos concluída.")
-        return lista_comparacao_raw, feedback_text
+        # Se algum dos dicionários de ângulos estiver vazio, não é possível comparar.
+        if not angles_aluno or not angles_mestre:
+            logging.warning("Comparação de pose pulada: não foi possível calcular os ângulos.")
+            return 0.0, "Aguardando pose..."
+
+        # Converte os dicionários de ângulos em vetores (arrays NumPy) para o cálculo.
+        # A ordem das chaves é garantida para que a comparação seja correta.
+        labels = sorted(angles_aluno.keys())
+        vec_aluno = np.array([angles_aluno[k] for k in labels]).reshape(1, -1)
+        vec_mestre = np.array([angles_mestre[k] for k in labels]).reshape(1, -1)
+        
+        # Calcula a similaridade de cosseno entre os dois vetores de ângulos.
+        # O resultado é uma matriz, então pegamos o primeiro elemento.
+        similarity = cosine_similarity(vec_aluno, vec_mestre)[0, 0]
+        # Converte a similaridade (que vai de -1 a 1) para uma pontuação de 0 a 100.
+        score = (similarity + 1) / 2 * 100
+        
+        logging.info(f"Similaridade calculada: {similarity:.2f}, Pontuação: {score:.2f}")
+
+        # Gera o feedback textual com base na maior diferença de ângulo.
+        feedback = self._generate_feedback(angles_aluno, angles_mestre, labels)
+        
+        return score, feedback
+
+    def _generate_feedback(self, angles_aluno, angles_mestre, labels):
+        """
+        Gera um feedback textual baseado na maior diferença angular entre o aluno e o mestre.
+
+        Args:
+            angles_aluno (dict): Dicionário de ângulos do aluno.
+            angles_mestre (dict): Dicionário de ângulos do mestre.
+            labels (list): Lista ordenada de nomes de articulações.
+
+        Returns:
+            str: Uma string com a dica de correção, ou uma mensagem de parabéns.
+        """
+        diffs = {label: abs(angles_aluno[label] - angles_mestre[label]) for label in labels}
+        
+        # Encontra a articulação com a maior diferença de ângulo.
+        if not diffs:
+            return "Movimento Perfeito!"
+            
+        max_diff_label = max(diffs, key=diffs.get)
+        max_diff_value = diffs[max_diff_label]
+
+        # Define um limiar para considerar a correção necessária.
+        # Se a maior diferença for pequena, o movimento é considerado bom.
+        if max_diff_value < 10:  # Limiar de 10 graus
+            logging.info("Diferença de ângulo abaixo do limiar. Feedback positivo.")
+            return "Excelente movimento!"
+
+        # Compara o ângulo do aluno com o do mestre para dar a dica correta.
+        aluno_angle = angles_aluno[max_diff_label]
+        mestre_angle = angles_mestre[max_diff_label]
+        
+        # Formata o nome da articulação para ser mais legível.
+        readable_label = max_diff_label.replace('_', ' ').title()
+        
+        if aluno_angle < mestre_angle:
+            feedback = f"Aumente o ângulo do {readable_label}"
+        else:
+            feedback = f"Diminua o ângulo do {readable_label}"
+            
+        logging.info(f"Feedback gerado: '{feedback}' para a articulação '{readable_label}' com diferença de {max_diff_value:.2f} graus.")
+        return feedback

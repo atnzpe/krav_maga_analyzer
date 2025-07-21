@@ -1,163 +1,129 @@
 # tests/test_file_upload.py
 import pytest
 import asyncio
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
-from src.main_flet import (
-    pick_file_result_aluno,
-    pick_file_result_mestre,
-    feedback_manager,
-)  # Importe feedback_manager se for global
+
 import flet as ft
+import os
+import sys
 
-# Configuração de logging para o teste, se necessário
-import logging
+# Adiciona o diretório raiz para importação correta
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-logging.basicConfig(level=logging.INFO)
-
-
-@pytest.fixture
-def mock_page_instance():
-    """
-    Fixture que retorna um mock da instância da página Flet.
-    Ajusta o mock para simular o comportamento de run_task e update.
-    """
-    mock_page = AsyncMock(spec=ft.Page)
-    mock_page.run_task.side_effect = lambda func: asyncio.create_task(func())
-    mock_page.update = AsyncMock()
-    return mock_page
-
+# Importa a função a ser testada e as dependências que ela manipula
+from src.main_flet import pick_file_result
+from src.video_analyzer import VideoAnalyzer
+from src.utils import FeedbackManager
 
 @pytest.fixture
-def create_dummy_video_file(tmp_path):
+def mock_page_and_controls():
     """
-    Fixture que cria um arquivo de vídeo dummy para testes.
+    Cria mocks para a página Flet e os controles que a função de callback manipula.
+    Isso nos permite simular a UI e verificar as interações.
     """
+    page = AsyncMock(spec=ft.Page)
+    page.update = AsyncMock()
 
-    def _create_file(filename="test_video.mp4", content=b"dummy video content"):
-        file_path = tmp_path / filename
-        with open(file_path, "wb") as f:
-            f.write(content)
-        return file_path
-
-    return _create_file
-
-
-@pytest.fixture(autouse=True)
-def setup_feedback_manager(mock_page_instance):
-    """
-    Fixture para configurar o FeedbackManager antes de cada teste.
-    Isso é crucial porque o FeedbackManager agora espera um ft.Text.
-    """
-    # Cria um mock para o controle ft.Text
-    mock_feedback_text_control = MagicMock(spec=ft.Text)
-    mock_feedback_text_control.page = (
-        mock_page_instance  # Garante que o .page seja acessível
-    )
-    feedback_manager.set_feedback_control(mock_feedback_text_control)
-
-
-@pytest.mark.asyncio
-async def test_pick_file_result_aluno_success(
-    mock_page_instance, create_dummy_video_file
-):
-    """
-    Testa o carregamento bem-sucedido do vídeo do aluno.
-    """
-    global page_instance  # Acessa a variável global page_instance no main_flet.py
-    page_instance = mock_page_instance  # Define a instância global para o teste
-
-    dummy_file_path = create_dummy_video_file()
-
-    mock_file_picker_event = MagicMock(spec=ft.FilePickerResultEvent)
-    mock_file_picker_event.files = [
-        MagicMock(
-            spec=ft.FilePickerFile, name="aluno_video.mp4", path=str(dummy_file_path)
+    # Simula a estrutura de controles para que possamos acessar o botão de análise
+    analyze_button = ft.ElevatedButton(disabled=True)
+    page.controls = [
+        ft.Column(
+            controls=[
+                ft.Row(), # Placeholder para a primeira linha de botões
+                ft.Row(controls=[ft.ElevatedButton(), ft.ElevatedButton(), analyze_button]),
+            ]
         )
     ]
+    return page, analyze_button
 
-    await pick_file_result_aluno(mock_file_picker_event)
+@pytest.fixture
+def mock_dependencies():
+    """
+    Cria mocks para as dependências externas que a função `pick_file_result` utiliza,
+    como o VideoAnalyzer e o FeedbackManager.
+    """
+    with patch('src.main_flet.video_analyzer', spec=VideoAnalyzer) as mock_analyzer, \
+         patch('src.main_flet.feedback_manager', spec=FeedbackManager) as mock_feedback:
 
-    mock_page_instance.run_task.assert_called_once()
-    mock_page_instance.update.assert_called()
-    # Verifica se o método update_feedback do feedback_manager foi chamado com a página
-    feedback_manager.update_feedback.assert_any_call(
-        mock_page_instance, "Vídeo do aluno carregado com sucesso!"
-    )
+        # Configura o estado inicial dos mocks
+        mock_analyzer.video_aluno_path = None
+        mock_analyzer.video_mestre_path = None
+        mock_analyzer.load_video_from_bytes = MagicMock()
 
+        yield mock_analyzer, mock_feedback
 
 @pytest.mark.asyncio
-async def test_pick_file_result_aluno_cancel(mock_page_instance):
+async def test_pick_file_result_aluno_success(mock_page_and_controls, mock_dependencies):
     """
-    Testa o cancelamento da seleção de arquivo do aluno.
+    Testa o upload bem-sucedido do vídeo do aluno.
+    Verifica se o feedback é atualizado e se o botão de análise permanece desabilitado.
     """
-    global page_instance
-    page_instance = mock_page_instance
+    page, analyze_button = mock_page_and_controls
+    mock_analyzer, mock_feedback = mock_dependencies
 
-    mock_file_picker_event = MagicMock(spec=ft.FilePickerResultEvent)
-    mock_file_picker_event.files = None
+    # Simula um evento de seleção de arquivo
+    mock_file = MagicMock(path="/fake/path/aluno.mp4", name="aluno.mp4")
+    event = MagicMock(spec=ft.FilePickerResultEvent, files=[mock_file], page=page)
 
-    await pick_file_result_aluno(mock_file_picker_event)
+    # Simula a leitura do arquivo
+    with patch("builtins.open", new_callable=MagicMock) as mock_open:
+        mock_open.return_value.read.return_value = b"dummy_video_data"
 
-    mock_page_instance.run_task.assert_not_called()
-    mock_page_instance.update.assert_called_once()
-    feedback_manager.update_feedback.assert_any_call(
-        mock_page_instance, "Seleção de vídeo do aluno cancelada."
-    )
+        # Chama a função sob teste
+        await pick_file_result(event, is_aluno=True)
 
+    # Verifica se o feedback foi chamado corretamente
+    mock_feedback.update_feedback.assert_any_call("Carregando vídeo do aluno: aluno.mp4...", is_error=False)
+    mock_feedback.update_feedback.assert_any_call("Vídeo do aluno 'aluno.mp4' carregado.", is_error=False)
+
+    # Verifica se o método de carregar vídeo foi chamado com os bytes corretos
+    mock_analyzer.load_video_from_bytes.assert_called_once_with(b"dummy_video_data", True)
+
+    # Verifica se a UI foi atualizada
+    page.update.assert_called()
+
+    # Após apenas um upload, o botão de análise deve continuar desabilitado
+    assert analyze_button.disabled is True
 
 @pytest.mark.asyncio
-async def test_pick_file_result_aluno_error_reading(mock_page_instance):
+async def test_both_files_uploaded_enables_analysis(mock_page_and_controls, mock_dependencies):
     """
-    Testa o cenário de erro durante a leitura do arquivo do aluno.
+    Testa se o botão de análise é habilitado após o upload de AMBOS os vídeos.
     """
-    global page_instance
-    page_instance = mock_page_instance
+    page, analyze_button = mock_page_and_controls
+    mock_analyzer, mock_feedback = mock_dependencies
 
-    mock_file_picker_event = MagicMock(spec=ft.FilePickerResultEvent)
-    mock_file_picker_event.files = [
-        MagicMock(
-            spec=ft.FilePickerFile,
-            name="non_existent.mp4",
-            path="/path/to/non_existent_file.mp4",
-        )
-    ]
+    # --- Simula o upload do ALUNO ---
+    mock_analyzer.video_aluno_path = "/fake/aluno.mp4" # Simula que já foi carregado
+    mock_file_mestre = MagicMock(path="/fake/path/mestre.mp4", name="mestre.mp4")
+    event_mestre = MagicMock(spec=ft.FilePickerResultEvent, files=[mock_file_mestre], page=page)
 
-    await pick_file_result_aluno(mock_file_picker_event)
+    with patch("builtins.open", new_callable=MagicMock) as mock_open:
+        mock_open.return_value.read.return_value = b"dummy_video_data"
+        await pick_file_result(event_mestre, is_aluno=False)
 
-    mock_page_instance.run_task.assert_called_once()
-    mock_page_instance.update.assert_called()
-    # Verifica se o feedback de erro foi chamado
-    # Usamos assert_called_with para verificar a mensagem exata com is_error=True
-    # Como a mensagem de erro pode variar, podemos ser mais flexíveis ou mockar a exceção
-    # Para este teste, verificamos que update_feedback foi chamado com is_error=True
-    args, kwargs = feedback_manager.update_feedback.call_args
-    assert kwargs.get("is_error") is True
+    # Verifica o feedback de sucesso para o segundo upload
+    mock_feedback.update_feedback.assert_any_call("Ambos os vídeos carregados! Clique em 'Analisar' para iniciar.", is_error=False)
 
+    # O botão de análise agora DEVE estar habilitado
+    assert analyze_button.disabled is False
 
 @pytest.mark.asyncio
-async def test_pick_file_result_mestre_success(
-    mock_page_instance, create_dummy_video_file
-):
+async def test_pick_file_no_file_selected(mock_page_and_controls, mock_dependencies):
     """
-    Testa o carregamento bem-sucedido do vídeo do mestre.
+    Testa o cenário onde o usuário cancela a seleção de arquivo.
     """
-    global page_instance
-    page_instance = mock_page_instance
+    page, _ = mock_page_and_controls
+    mock_analyzer, mock_feedback = mock_dependencies
 
-    dummy_file_path = create_dummy_video_file(filename="mestre_video.mp4")
+    # Simula um evento sem arquivos
+    event = MagicMock(spec=ft.FilePickerResultEvent, files=[], page=page)
 
-    mock_file_picker_event = MagicMock(spec=ft.FilePickerResultEvent)
-    mock_file_picker_event.files = [
-        MagicMock(
-            spec=ft.FilePickerFile, name="mestre_video.mp4", path=str(dummy_file_path)
-        )
-    ]
+    await pick_file_result(event, is_aluno=True)
 
-    await pick_file_result_mestre(mock_file_picker_event)
-
-    mock_page_instance.run_task.assert_called_once()
-    mock_page_instance.update.assert_called()
-    feedback_manager.update_feedback.assert_any_call(
-        mock_page_instance, "Vídeo do mestre carregado com sucesso!"
-    )
+    # Verifica o feedback
+    mock_feedback.update_feedback.assert_called_with("Nenhum vídeo do aluno selecionado.", is_error=False)
+    # Garante que nenhuma tentativa de carregar o vídeo foi feita
+    mock_analyzer.load_video_from_bytes.assert_not_called()
+    # Verifica se a UI foi atualizada
+    page.update.assert_called()
