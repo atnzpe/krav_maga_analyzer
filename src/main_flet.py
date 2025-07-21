@@ -2,7 +2,7 @@
 
 # --------------------------------------------------------------------------------------------------
 #  Krav Maga Motion Analyzer
-#  version 1.1.0
+#  version 1.2.0
 #  Copyright (C) 2024,
 #  開発者名 [Sujeito Programador]
 # --------------------------------------------------------------------------------------------------
@@ -10,11 +10,14 @@
 # --------------------------------------------------------------------------------------------------
 # Importação de Bibliotecas
 # --------------------------------------------------------------------------------------------------
-import flet as ft  # Biblioteca Flet para criar a interface gráfica.
-import cv2  # Biblioteca OpenCV para converter imagens para formatos que o Flet entende.
-import base64  # Para codificar as imagens em base64 e exibi-las no Flet.
-import logging  # Para registrar logs.
-from src.video_analyzer import VideoAnalyzer  # Importa nossa classe de análise.
+import flet as ft
+import cv2
+import base64
+import logging
+from src.video_analyzer import VideoAnalyzer
+
+# --- NOVA IMPORTAÇÃO PARA O RELATÓRIO ---
+from src.report_generator import ReportGenerator
 
 # --------------------------------------------------------------------------------------------------
 # Configuração do Logging
@@ -36,28 +39,27 @@ class KravMagaApp:
     def __init__(self, page: ft.Page):
         """
         Inicializador da aplicação.
-
-        Args:
-            page (ft.Page): O objeto da página principal do Flet.
         """
         self.page = page
-        self.setup_page()  # Configurações iniciais da janela/página.
+        self.setup_page()
 
-        self.video_analyzer = None  # O analisador será criado após o upload dos vídeos.
-        self.video_path_aluno = None  # Caminho do vídeo do aluno.
-        self.video_path_mestre = None  # Caminho do vídeo do mestre.
+        self.video_analyzer = None
+        self.video_path_aluno = None
+        self.video_path_mestre = None
 
         # --- Controles da UI (Widgets do Flet) ---
-        # Pickers para seleção de arquivos.
         self.file_picker_aluno = ft.FilePicker(on_result=self.on_file_aluno_selected)
         self.file_picker_mestre = ft.FilePicker(on_result=self.on_file_mestre_selected)
-        self.page.overlay.extend([self.file_picker_aluno, self.file_picker_mestre])
 
-        # Exibidores de imagem para os vídeos.
+        # --- NOVO FILE PICKER PARA SALVAR O RELATÓRIO ---
+        self.save_file_picker = ft.FilePicker(on_result=self.on_report_saved)
+        # Adiciona todos os pickers à sobreposição da página (necessário no Flet).
+        self.page.overlay.extend(
+            [self.file_picker_aluno, self.file_picker_mestre, self.save_file_picker]
+        )
+
         self.image_aluno = ft.Image(width=400, height=400)
         self.image_mestre = ft.Image(width=400, height=400)
-
-        # Slider para navegar pelos frames do vídeo.
         self.slider = ft.Slider(
             min=0,
             max=100,
@@ -66,14 +68,10 @@ class KravMagaApp:
             on_change=self.on_slider_change,
             visible=False,
         )
-
-        # Botões e textos informativos.
         self.analyze_button = ft.Button(
             text="Analisar Movimentos", on_click=self.analyze, disabled=True
         )
         self.status_text = ft.Text("Por favor, carregue o vídeo do aluno e do mestre.")
-
-        # --- NOVOS CONTROLES PARA FEEDBACK ---
         self.score_text = ft.Text(
             "Pontuação: -",
             size=24,
@@ -84,9 +82,16 @@ class KravMagaApp:
         self.feedback_text = ft.Text(
             "Dica: -", size=18, color=ft.colors.AMBER, visible=False
         )
-        # ------------------------------------
 
-        self.build_layout()  # Monta a UI.
+        # --- NOVO BOTÃO PARA GERAR O RELATÓRIO ---
+        self.report_button = ft.ElevatedButton(
+            text="Gerar Relatório PDF",
+            icon=ft.icons.PICTURE_AS_PDF,
+            on_click=self.on_generate_report_click,
+            visible=False,  # Só fica visível após a análise.
+        )
+
+        self.build_layout()
         logging.info("Aplicação Flet inicializada e layout construído.")
 
     def setup_page(self):
@@ -94,14 +99,11 @@ class KravMagaApp:
         self.page.title = "Analisador de Movimentos de Krav Maga"
         self.page.vertical_alignment = ft.MainAxisAlignment.CENTER
         self.page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
-        self.page.theme_mode = (
-            ft.ThemeMode.DARK
-        )  # Zen: "A escuridão na borda da cidade."
+        self.page.theme_mode = ft.ThemeMode.DARK
 
     def build_layout(self):
         """Constrói o layout da interface com os controles Flet."""
         logging.info("Construindo o layout da UI.")
-        # O layout é organizado em Colunas e Linhas para posicionar os elementos.
         self.page.add(
             ft.Column(
                 [
@@ -137,21 +139,21 @@ class KravMagaApp:
                         alignment=ft.MainAxisAlignment.CENTER,
                         vertical_alignment=ft.CrossAxisAlignment.START,
                     ),
-                    # --- Adicionando novos widgets de feedback ao layout ---
                     self.score_text,
                     self.feedback_text,
-                    # ----------------------------------------------------
                     self.slider,
+                    # --- Adiciona o novo botão de relatório ao final do layout ---
+                    self.report_button,
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=20,
+                spacing=15,  # Ajustado para melhor espaçamento
             )
         )
         self.page.update()
 
+    # on_file_aluno_selected, on_file_mestre_selected, check_files_loaded, analyze: NENHUMA MUDANÇA
     def on_file_aluno_selected(self, e: ft.FilePickerResultEvent):
-        """Callback executado quando o arquivo do aluno é selecionado."""
         if e.files:
             self.video_path_aluno = e.files[0].path
             self.status_text.value = f"Aluno: {e.files[0].name}"
@@ -160,7 +162,6 @@ class KravMagaApp:
         self.page.update()
 
     def on_file_mestre_selected(self, e: ft.FilePickerResultEvent):
-        """Callback executado quando o arquivo do mestre é selecionado."""
         if e.files:
             self.video_path_mestre = e.files[0].path
             self.status_text.value += f" | Mestre: {e.files[0].name}"
@@ -169,7 +170,6 @@ class KravMagaApp:
         self.page.update()
 
     def check_files_loaded(self):
-        """Verifica se ambos os vídeos foram carregados e habilita o botão de análise."""
         if self.video_path_aluno and self.video_path_mestre:
             self.analyze_button.disabled = False
             self.status_text.value = "Vídeos prontos! Clique em 'Analisar Movimentos'."
@@ -179,82 +179,119 @@ class KravMagaApp:
         self.page.update()
 
     def analyze(self, e):
-        """Inicia o processo de análise quando o botão é clicado."""
         logging.info("Botão de análise clicado.")
         self.status_text.value = "Analisando... por favor, aguarde."
         self.analyze_button.disabled = True
         self.page.update()
-
-        # Instancia e inicia o analisador de vídeo.
         self.video_analyzer = VideoAnalyzer(
             self.video_path_aluno, self.video_path_mestre
         )
         self.video_analyzer.start_analysis()
-
-        # Verifica periodicamente se a análise terminou.
         self.page.run_thread(self.wait_for_analysis_completion)
 
     def wait_for_analysis_completion(self):
-        """Espera a thread de análise terminar e então configura a UI pós-análise."""
-        self.video_analyzer.processing_thread.join()  # Espera a thread finalizar.
-        logging.info("Análise concluída. Configurando o slider e a visualização.")
+        """Espera a análise terminar e atualiza a UI."""
+        self.video_analyzer.processing_thread.join()
+        logging.info("Análise concluída. Configurando a UI pós-análise.")
 
-        # Configura o slider com o número correto de frames.
         frame_count = self.video_analyzer.get_frame_count()
         if frame_count > 0:
             self.slider.max = frame_count - 1
             self.slider.divisions = frame_count - 1
             self.slider.visible = True
-            # --- Torna os widgets de feedback visíveis ---
             self.score_text.visible = True
             self.feedback_text.visible = True
-            # ------------------------------------------
-            self.status_text.value = "Análise completa! Use o slider para navegar."
-            self.update_frame_display(0)  # Exibe o primeiro frame.
+            # --- TORNA O BOTÃO DE RELATÓRIO VISÍVEL ---
+            self.report_button.visible = True
+            self.status_text.value = (
+                "Análise completa! Use o slider ou gere um relatório."
+            )
+            self.update_frame_display(0)
         else:
             self.status_text.value = "Erro: Não foi possível processar os vídeos."
 
         self.page.update()
 
+    # on_slider_change, update_frame_display, frame_to_base64: NENHUMA MUDANÇA
     def on_slider_change(self, e):
-        """Callback executado quando o valor do slider muda."""
         frame_index = int(e.control.value)
         logging.debug(f"Slider movido para o frame {frame_index}.")
         self.update_frame_display(frame_index)
 
     def update_frame_display(self, frame_index):
-        """Atualiza as imagens e os textos de feedback na tela."""
         if self.video_analyzer:
-            # Pega todos os dados para o frame atual.
             frame_aluno, frame_mestre, score, feedback = (
                 self.video_analyzer.get_data_at_frame(frame_index)
             )
-
             if frame_aluno is not None and frame_mestre is not None:
-                # Converte os frames (arrays numpy) para strings base64 que o Flet pode exibir.
                 self.image_aluno.src_base64 = self.frame_to_base64(frame_aluno)
                 self.image_mestre.src_base64 = self.frame_to_base64(frame_mestre)
-
-                # --- ATUALIZA A UI COM OS NOVOS DADOS ---
                 self.score_text.value = f"Pontuação: {score:.2f}%"
                 self.feedback_text.value = f"Dica: {feedback}"
-                # Muda a cor da pontuação com base no valor para um feedback visual rápido.
                 if score >= 85:
                     self.score_text.color = ft.colors.GREEN
                 elif score >= 60:
                     self.score_text.color = ft.colors.ORANGE
                 else:
                     self.score_text.color = ft.colors.RED
-                # -----------------------------------------
-
                 self.page.update()
 
     def frame_to_base64(self, frame):
-        """Converte um frame OpenCV para uma string base64."""
-        # Codifica o frame para o formato JPEG em memória.
         _, buffer = cv2.imencode(".jpg", frame)
-        # Converte os bytes do buffer para uma string base64.
         return base64.b64encode(buffer).decode("utf-8")
+
+    # --- NOVOS MÉTODOS PARA GERAR O RELATÓRIO ---
+    def on_generate_report_click(self, e):
+        """
+        Callback para o clique no botão de gerar relatório.
+        Abre o diálogo para salvar o arquivo.
+        """
+        logging.info("Botão 'Gerar Relatório' clicado. Abrindo diálogo para salvar.")
+        self.save_file_picker.save_file(
+            dialog_title="Salvar Relatório de Análise",
+            file_name="relatorio_krav_maga.pdf",
+            allowed_extensions=["pdf"],
+        )
+
+    def on_report_saved(self, e: ft.FilePickerResultEvent):
+        """
+        Callback executado após o usuário escolher o local para salvar o PDF.
+        """
+        if e.path:
+            save_path = e.path
+            logging.info(f"Usuário escolheu salvar o relatório em: {save_path}")
+
+            # Pega os dados necessários para o relatório.
+            scores = self.video_analyzer.scores
+            feedbacks = self.video_analyzer.feedbacks
+            frame_aluno, frame_mestre = self.video_analyzer.get_best_frames()
+
+            if frame_aluno is not None:
+                # Gera o relatório.
+                generator = ReportGenerator(
+                    scores, feedbacks, frame_aluno, frame_mestre
+                )
+                success, error_message = generator.generate(save_path)
+
+                # Mostra uma mensagem de confirmação (ou erro) para o usuário.
+                if success:
+                    snack_bar = ft.SnackBar(
+                        ft.Text(f"Relatório salvo com sucesso em {save_path}"),
+                        bgcolor=ft.colors.GREEN,
+                    )
+                else:
+                    snack_bar = ft.SnackBar(
+                        ft.Text(f"Erro ao salvar relatório: {error_message}"),
+                        bgcolor=ft.colors.RED,
+                    )
+
+                self.page.snack_bar = snack_bar
+                self.page.snack_bar.open = True
+                self.page.update()
+            else:
+                logging.error(
+                    "Não foi possível gerar o relatório pois os melhores frames não foram encontrados."
+                )
 
 
 def main(page: ft.Page):
@@ -262,6 +299,5 @@ def main(page: ft.Page):
     KravMagaApp(page)
 
 
-# Ponto de entrada da aplicação.
 if __name__ == "__main__":
     ft.app(target=main)
