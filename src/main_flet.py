@@ -63,7 +63,7 @@ class KravMagaApp:
         )
         self.analyze_button = ft.ElevatedButton(
             "Analisar Movimentos",
-            icon=ft.icons.ANALYTICS,
+            icon=ft.Icons.ANALYTICS,
             on_click=self.analyze_videos,
             disabled=True,
         )
@@ -118,7 +118,7 @@ class KravMagaApp:
                         [
                             ft.ElevatedButton(
                                 "Upload Vídeo do Aluno",
-                                icon=ft.icons.UPLOAD_FILE,
+                                icon=ft.Icons.UPLOAD_FILE,
                                 on_click=lambda _: self.file_picker_aluno.pick_files(
                                     allow_multiple=False,
                                     allowed_extensions=["mp4", "mov", "avi"],
@@ -126,7 +126,7 @@ class KravMagaApp:
                             ),
                             ft.ElevatedButton(
                                 "Upload Vídeo do Mestre",
-                                icon=ft.icons.UPLOAD_FILE,
+                                icon=ft.Icons.UPLOAD_FILE,
                                 on_click=lambda _: self.file_picker_mestre.pick_files(
                                     allow_multiple=False,
                                     allowed_extensions=["mp4", "mov", "avi"],
@@ -259,6 +259,7 @@ class KravMagaApp:
         logger.info("Análise na thread concluída. Agendando atualização da UI.")
         # O Flet requer que as atualizações da UI sejam feitas a partir da thread principal.
         # self.page.run() agenda a execução da função na thread correta.
+        logger.info(self.setup_ui_post_analysis)
         self.page.run(self.setup_ui_post_analysis)
 
     def setup_ui_post_analysis(self):
