@@ -8,7 +8,7 @@ A interface do usuário é construída com [Flet](https://flet.dev/), uma estrut
 
 # Analisador de Movimentos de Krav Maga
 
-**Versão:** 1.7.0
+**Versão:** 1.9.0
 
 Uma aplicação de desktop para análise e aprimoramento de técnicas de Krav Maga utilizando Visão Computacional, MediaPipe e Flet.
 

@@ -42,7 +42,7 @@ class KravMagaApp:
         )
         self.analyze_button = ft.ElevatedButton(
             "Analisar Movimentos",
-            icon=ft.icons.ANALYTICS,
+            icon=ft.Icons.ANALYTICS,
             on_click=self.analyze_videos,
             disabled=True,
         )
@@ -62,7 +62,7 @@ class KravMagaApp:
             content=ft.Text("Vídeo do Aluno"),
             width=500,
             height=400,
-            bgcolor=ft.colors.BLACK26,
+            bgcolor=ft.Colors.BLACK26,
             border_radius=ft.border_radius.all(10),
             alignment=ft.alignment.center,
         )
@@ -70,7 +70,7 @@ class KravMagaApp:
             content=ft.Text("Vídeo do Mestre"),
             width=500,
             height=400,
-            bgcolor=ft.colors.BLACK26,
+            bgcolor=ft.Colors.BLACK26,
             border_radius=ft.border_radius.all(10),
             alignment=ft.alignment.center,
         )
@@ -86,17 +86,17 @@ class KravMagaApp:
         )
 
         self.play_button = ft.IconButton(
-            icon=ft.icons.PLAY_ARROW,
+            icon=ft.Icons.PLAY_ARROW,
             on_click=self.toggle_play_pause,
             tooltip="Reproduzir/Pausar",
         )
         self.prev_frame_button = ft.IconButton(
-            icon=ft.icons.SKIP_PREVIOUS,
+            icon=ft.Icons.SKIP_PREVIOUS,
             on_click=self.prev_frame,
             tooltip="Frame Anterior",
         )
         self.next_frame_button = ft.IconButton(
-            icon=ft.icons.SKIP_NEXT, on_click=self.next_frame, tooltip="Próximo Frame"
+            icon=ft.Icons.SKIP_NEXT, on_click=self.next_frame, tooltip="Próximo Frame"
         )
         self.playback_controls = ft.Row(
             [
@@ -135,7 +135,7 @@ class KravMagaApp:
                         [
                             ft.ElevatedButton(
                                 "Upload Vídeo do Aluno",
-                                icon=ft.icons.UPLOAD_FILE,
+                                icon=ft.Icons.UPLOAD_FILE,
                                 on_click=lambda _: self.file_picker_aluno.pick_files(
                                     allow_multiple=False,
                                     allowed_extensions=["mp4", "mov", "avi"],
@@ -143,7 +143,7 @@ class KravMagaApp:
                             ),
                             ft.ElevatedButton(
                                 "Upload Vídeo do Mestre",
-                                icon=ft.icons.UPLOAD_FILE,
+                                icon=ft.Icons.UPLOAD_FILE,
                                 on_click=lambda _: self.file_picker_mestre.pick_files(
                                     allow_multiple=False,
                                     allowed_extensions=["mp4", "mov", "avi"],
@@ -309,7 +309,7 @@ class KravMagaApp:
         """Inicia ou pausa a reprodução automática dos frames."""
         self.is_playing = not self.is_playing
         self.play_button.icon = (
-            ft.icons.PAUSE if self.is_playing else ft.icons.PLAY_ARROW
+            ft.Icons.PAUSE if self.is_playing else ft.Icons.PLAY_ARROW
         )
 
         if self.is_playing:
@@ -336,7 +336,7 @@ class KravMagaApp:
             time.sleep(1 / 30)
 
         self.is_playing = False
-        self.play_button.icon = ft.icons.PLAY_ARROW
+        self.play_button.icon = ft.Icons.PLAY_ARROW
         self.page.update()
         logger.info("Reprodução automática finalizada.")
 
