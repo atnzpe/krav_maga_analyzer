@@ -6,31 +6,42 @@ O Krav Maga Movement Analyzer é uma aplicação inovadora projetada para auxili
 
 A interface do usuário é construída com [Flet](https://flet.dev/), uma estrutura que permite a criação de aplicativos web, desktop e móveis com Python.
 
-## Funcionalidades Atuais
+# Analisador de Movimentos de Krav Maga
 
-* **Upload de Vídeos:** Capacidade de carregar vídeos de alunos e vídeos de referência (mestre) através de uma interface intuitiva.
-* **Detecção de Pose:** Processamento de vídeos para identificar e rastrear os principais pontos de referência (landmarks) do corpo humano usando MediaPipe Pose.
-* **Visualização Lado a Lado:** Exibição simultânea dos vídeos do aluno e do mestre com os "esqueletos" (landmarks) sobrepostos, permitindo uma comparação visual direta.
-* **Controle de Frames:** Navegação manual frame a frame através de sliders e botões de avanço/retrocesso.
-* **Reprodução de Vídeo:** Funcionalidade de "Play" e "Pause" para reprodução dos vídeos processados, permitindo a análise dinâmica do movimento.
-* **Log de Atividades:** Registro detalhado das operações e eventos da aplicação para facilitar a depuração e monitoramento.
+**Versão:** 1.7.0
 
-## Exemplos de Uso
+Uma aplicação de desktop para análise e aprimoramento de técnicas de Krav Maga utilizando Visão Computacional, MediaPipe e Flet.
 
-A aplicação é ideal para analisar diversos movimentos de Krav Maga, como:
+## Funcionalidades
 
-* Defesas contra ataques de faca.
-* Sequências básicas de defesa com 7 movimentos.
-* Sequências de defesa mais complexas com 14 movimentos.
+- **Upload de Vídeos:** Carregue facilmente o vídeo do aluno e do mestre.
+- **Visualização Lado a Lado:** Assista aos dois vídeos sincronizados para uma comparação visual direta.
+- **Detecção de Pose:** Utiliza o Google MediaPipe para rastrear os principais pontos do corpo.
+- **✨ Controles de Reprodução Completos:**
+    - **Play/Pause:** Assista à execução do movimento em velocidade normal.
+    - **Navegação Frame a Frame:** Use os botões de "Próximo" e "Anterior" para uma análise minuciosa.
+    - **Slider Interativo:** Arraste o slider para pular para qualquer ponto do vídeo instantaneamente.
+- **Feedback em Tempo Real:** Receba uma pontuação de similaridade e dicas de correção para cada frame.
+- **Geração de Relatório em PDF:** Exporte um resumo profissional da sua análise.
 
 ## Tecnologias Utilizadas
 
-* **Python 3.11:** Linguagem de programação principal.
-* **Flet:** Framework para construção da interface de usuário multi-plataforma.
-* **MediaPipe:** Biblioteca para detecção de pose.
-* **OpenCV (`cv2`):** Biblioteca para processamento de imagem e vídeo.
-* **NumPy:** Para manipulação eficiente de arrays de dados (frames de vídeo, landmarks).
-* **Pillow (PIL):** Utilizado internamente para manipulação de imagens.
+- **Python 3.11**
+- **Flet**
+- **OpenCV**
+- **MediaPipe**
+- **NumPy**
+- **scikit-learn**
+- **fpdf2**
+
+## Como Usar
+
+1.  Execute a aplicação.
+2.  Carregue os vídeos do aluno e do mestre.
+3.  Clique em "Analisar Movimentos".
+4.  Aguarde o processamento.
+5.  **Use os botões de play, pause, avançar e voltar, ou o slider, para analisar os movimentos em detalhe.**
+6.  Observe a pontuação e as dicas que mudam a cada frame.
 
 ## Como Instalar e Rodar
 
