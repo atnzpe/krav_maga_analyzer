@@ -70,7 +70,7 @@ class KravMagaApp:
             content=ft.Text("Vídeo do Mestre"),
             width=500,
             height=400,
-            bgcolor=ft.colors.BLACK26,
+            bgcolor=ft.Colors.BLACK26,
             border_radius=ft.border_radius.all(10),
             alignment=ft.alignment.center,
         )
@@ -333,7 +333,7 @@ class KravMagaApp:
                 break
 
             self.update_frame_display(i)
-            time.sleep(1 / 30)  # Simula 30 FPS.
+            time.sleep(1 / 30)
 
         self.is_playing = False
         self.play_button.icon = ft.Icons.PLAY_ARROW
