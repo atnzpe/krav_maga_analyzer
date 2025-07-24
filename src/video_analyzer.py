@@ -79,7 +79,6 @@ class VideoAnalyzer:
 
         def target():
             self._run_analysis_thread()
-            # Chama a função de callback fornecida pela UI quando a análise termina.
             post_analysis_callback()
 
         self.is_processing = True
