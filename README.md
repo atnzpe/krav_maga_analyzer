@@ -8,7 +8,7 @@ A interface do usuário é construída com [Flet](https://flet.dev/), uma estrut
 
 # Analisador de Movimentos de Krav Maga
 
-**Versão:** 1.13.0
+**Versão:** 1.14.0
 
 Uma aplicação de desktop para análise e aprimoramento de técnicas de Krav Maga utilizando Visão Computacional, MediaPipe e Flet.
 
@@ -16,15 +16,11 @@ Uma aplicação de desktop para análise e aprimoramento de técnicas de Krav Ma
 
 - **Upload de Vídeos:** Carregue facilmente o vídeo do aluno e do mestre.
 - **Visualização Lado a Lado:** Assista aos dois vídeos sincronizados para uma comparação visual direta.
+- **✨ NOVO: Barra de Progresso da Análise:** Acompanhe o andamento do processamento em tempo real.
 - **Detecção de Pose:** Utiliza o Google MediaPipe para rastrear os principais pontos do corpo.
 - **Controles de Reprodução Completos:** Play/Pause, navegação frame a frame e slider interativo.
 - **Feedback em Tempo Real:** Receba uma pontuação de similaridade e dicas de correção para cada frame.
-- **✨ Geração de Relatório em PDF Aprimorada:**
-    - **Totalmente em Português:** Feedbacks e legendas traduzidas.
-    - **Feedback Visual:** Esqueletos coloridos destacam os acertos (verde) e os pontos de melhoria (vermelho).
-    - **Layout Profissional:** Resumo estatístico, imagens lado a lado e design claro.
-    - **Nome de Arquivo com Data/Hora:** O relatório é salvo com um nome de arquivo único.
-    - **Abertura Automática:** O PDF é aberto automaticamente após ser gerado.
+- **Geração de Relatório em PDF Aprimorada:** Exporte um resumo profissional da sua análise.
 
 ## Tecnologias Utilizadas
 
@@ -40,7 +36,7 @@ Uma aplicação de desktop para análise e aprimoramento de técnicas de Krav Ma
 
 1.  Execute a aplicação.
 2.  Carregue os vídeos do aluno e do mestre.
-3.  Clique em "Analisar Movimentos".
+3.  Clique em "Analisar Movimentos" e acompanhe o progresso.
 4.  Aguarde o processamento.
 5.  Use os controles de reprodução para analisar os movimentos em detalhe.
 6.  Clique em "Gerar Relatório PDF" para salvar e visualizar seu resumo completo e aprimorado.

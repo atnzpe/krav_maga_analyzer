@@ -49,6 +49,9 @@ class KravMagaApp:
             disabled=True,
         )
 
+        # --- NOVO CONTROLE DE BARRA DE PROGRESSO ---
+        self.progress_bar = ft.ProgressBar(width=400, visible=False)
+
         self.img_aluno_control = ft.Image(
             fit=ft.ImageFit.CONTAIN,
             visible=False,
@@ -167,6 +170,8 @@ class KravMagaApp:
                         spacing=20,
                     ),
                     ft.Container(content=self.status_text, padding=10),
+                    # Adiciona a barra de progresso ao layout
+                    self.progress_bar,
                     ft.ResponsiveRow(
                         [
                             ft.Column(
@@ -209,6 +214,62 @@ class KravMagaApp:
         )
         self.page.update()
 
+    def update_progress(self, percent_complete):
+        """Callback para atualizar a barra de progresso na UI."""
+        self.progress_bar.value = percent_complete
+        self.status_text.value = f"Analisando... {int(percent_complete * 100)}%"
+        self.page.update()
+
+    def analyze_videos(self, e):
+        """Inicia a análise dos vídeos em uma thread."""
+        self.status_text.value = "Análise em andamento..."
+        self.analyze_button.disabled = True
+        self.progress_bar.value = 0
+        self.progress_bar.visible = True
+        self.page.update()
+
+        aluno_path = self.page.client_storage.get("video_aluno_path")
+        mestre_path = self.page.client_storage.get("video_mestre_path")
+
+        self.video_analyzer = VideoAnalyzer()
+        try:
+            with open(aluno_path, "rb") as f:
+                self.video_analyzer.load_video_from_bytes(f.read(), is_aluno=True)
+            with open(mestre_path, "rb") as f:
+                self.video_analyzer.load_video_from_bytes(f.read(), is_aluno=False)
+
+            self.video_analyzer.analyze_and_compare(
+                post_analysis_callback=self.setup_ui_post_analysis,
+                progress_callback=self.update_progress,  # Passa a função de callback
+            )
+        except Exception as ex:
+            logger.error(f"Falha ao carregar vídeos: {ex}", exc_info=True)
+            self.status_text.value = f"Erro ao ler os arquivos: {ex}"
+            self.progress_bar.visible = False
+            self.page.update()
+
+    def setup_ui_post_analysis(self):
+        """Configura a UI após a conclusão da análise."""
+        logger.info("Configurando a UI para exibir os resultados.")
+        num_frames = len(self.video_analyzer.processed_frames_aluno)
+
+        self.progress_bar.visible = False  # Esconde a barra de progresso
+
+        if num_frames > 0:
+            self.slider_control.max = num_frames - 1
+            self.slider_control.divisions = num_frames - 1 if num_frames > 1 else 1
+            self.slider_control.disabled = False
+            self.playback_controls.visible = True
+            self.report_button.visible = True
+
+            self.status_text.value = "Análise completa! Use os controles abaixo."
+            self.update_frame_display(0)
+        else:
+            self.status_text.value = "Erro: Não foi possível processar os vídeos."
+
+        self.page.update()
+
+    # ... (demais métodos como on_pick_file_result, on_report_saved, etc., permanecem os mesmos) ...
     def on_pick_file_result_aluno(self, e: ft.FilePickerResultEvent):
         self.pick_file_result(e, is_aluno=True)
 
@@ -241,50 +302,6 @@ class KravMagaApp:
             self.status_text.value = (
                 "Vídeo do mestre carregado. Aguardando vídeo do aluno."
             )
-
-        self.page.update()
-
-    def analyze_videos(self, e):
-        self.status_text.value = "Análise em andamento..."
-        self.analyze_button.disabled = True
-        self.aluno_placeholder.content = ft.ProgressRing()
-        self.mestre_placeholder.content = ft.ProgressRing()
-        self.aluno_placeholder.visible = True
-        self.mestre_placeholder.visible = True
-        self.page.update()
-
-        aluno_path = self.page.client_storage.get("video_aluno_path")
-        mestre_path = self.page.client_storage.get("video_mestre_path")
-
-        self.video_analyzer = VideoAnalyzer()
-        try:
-            with open(aluno_path, "rb") as f:
-                self.video_analyzer.load_video_from_bytes(f.read(), is_aluno=True)
-            with open(mestre_path, "rb") as f:
-                self.video_analyzer.load_video_from_bytes(f.read(), is_aluno=False)
-
-            self.video_analyzer.analyze_and_compare(
-                post_analysis_callback=self.setup_ui_post_analysis
-            )
-        except Exception as ex:
-            logger.error(f"Falha ao carregar vídeos: {ex}", exc_info=True)
-            self.status_text.value = f"Erro ao ler os arquivos: {ex}"
-            self.page.update()
-
-    def setup_ui_post_analysis(self):
-        logger.info("Configurando a UI para exibir os resultados.")
-        num_frames = len(self.video_analyzer.processed_frames_aluno)
-        if num_frames > 0:
-            self.slider_control.max = num_frames - 1
-            self.slider_control.divisions = num_frames - 1 if num_frames > 1 else 1
-            self.slider_control.disabled = False
-            self.playback_controls.visible = True
-            self.report_button.visible = True
-
-            self.status_text.value = "Análise completa! Use os controles abaixo."
-            self.update_frame_display(0)
-        else:
-            self.status_text.value = "Erro: Não foi possível processar os vídeos."
 
         self.page.update()
 
@@ -362,8 +379,6 @@ class KravMagaApp:
         self.update_frame_display(new_index)
 
     def on_generate_report_click(self, e):
-        """Abre o diálogo para salvar o arquivo PDF."""
-        # --- GERAÇÃO DE NOME DE ARQUIVO COM TIMESTAMP ---
         timestamp = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
         file_name = f"relatorio_krav_maga_{timestamp}.pdf"
         self.save_file_picker.save_file(
@@ -426,7 +441,6 @@ class KravMagaApp:
                         ft.Text(f"Relatório salvo com sucesso!"),
                         bgcolor=ft.Colors.GREEN,
                     )
-                    # --- ABRIR O ARQUIVO AUTOMATICAMENTE ---
                     try:
                         os.startfile(save_path)
                     except AttributeError:

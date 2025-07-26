@@ -70,16 +70,16 @@ class VideoAnalyzer:
             logger.error(f"Erro ao carregar vídeo de bytes: {e}", exc_info=True)
             raise
 
-    def analyze_and_compare(self, post_analysis_callback):
+    def analyze_and_compare(self, post_analysis_callback, progress_callback=None):
         """
-        Inicia a análise em uma nova thread e chama o callback ao finalizar.
+        Inicia a análise em uma nova thread e chama callbacks para progresso e finalização.
         """
         if self.is_processing:
             logger.info("Análise já em andamento.")
             return
 
         def target():
-            self._run_analysis_thread()
+            self._run_analysis_thread(progress_callback)
             post_analysis_callback()
 
         self.is_processing = True
@@ -87,9 +87,9 @@ class VideoAnalyzer:
         self.processing_thread = threading.Thread(target=target, daemon=True)
         self.processing_thread.start()
 
-    def _run_analysis_thread(self):
+    def _run_analysis_thread(self, progress_callback=None):
         """
-        Método executado na thread. Processa os vídeos e compara os frames.
+        Método executado na thread. Processa os vídeos, compara os frames e reporta o progresso.
         """
         try:
             logger.info("Thread de análise iniciada.")
@@ -137,8 +137,10 @@ class VideoAnalyzer:
                 )
                 self.comparison_results.append({"score": score, "feedback": feedback})
 
-                if i % 50 == 0 and i > 0:
-                    logger.info(f"Processados {i}/{num_frames} frames...")
+                # --- LÓGICA DE CALLBACK DE PROGRESSO ---
+                if progress_callback:
+                    percent_complete = (i + 1) / num_frames
+                    progress_callback(percent_complete)
 
         except Exception as e:
             logger.error(f"Erro na thread de análise: {e}", exc_info=True)
