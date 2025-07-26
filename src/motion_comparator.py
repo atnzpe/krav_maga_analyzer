@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 
 class MotionComparator:
     """
-    Compara os movimentos do aluno com os do mestre.
+    Compara os movimentos do aluno com os do mestre com lógica aprimorada e feedback em português.
     """
 
     def __init__(self):
@@ -39,7 +39,7 @@ class MotionComparator:
             "LEFT_ANKLE": mp.solutions.pose.PoseLandmark.LEFT_ANKLE.value,
             "RIGHT_ANKLE": mp.solutions.pose.PoseLandmark.RIGHT_ANKLE.value,
         }
-        # --- NOVO DICIONÁRIO DE TRADUÇÃO ---
+        # --- DICIONÁRIO DE TRADUÇÃO ---
         self.readable_angle_names = {
             "LEFT_ELBOW_ANGLE": "Cotovelo Esquerdo",
             "RIGHT_ELBOW_ANGLE": "Cotovelo Direito",
@@ -79,44 +79,43 @@ class MotionComparator:
                 angle_diffs[angle_name] = abs(
                     angles_aluno[angle_name] - angles_mestre[angle_name]
                 )
-            except ValueError as e:
+            except ValueError:
                 (
                     angles_aluno[angle_name],
                     angles_mestre[angle_name],
                     angle_diffs[angle_name],
-                ) = (0, 0, 0)
+                ) = (0, 0, 180)
 
-        labels = sorted(angles_aluno.keys())
-        vec_aluno = np.array([angles_aluno[k] for k in labels]).reshape(1, -1)
-        vec_mestre = np.array([angles_mestre[k] for k in labels]).reshape(1, -1)
-
-        from sklearn.metrics.pairwise import cosine_similarity
-
-        similarity = cosine_similarity(vec_aluno, vec_mestre)[0, 0]
-        score = max(0, similarity) * 100
+        # --- LÓGICA DE PONTUAÇÃO REFINADA ---
+        # A pontuação agora é baseada na média da similaridade de cada ângulo.
+        # Similaridade de 100% significa 0 graus de diferença. 0% significa 180 graus.
+        similarities = [max(0, 1 - (diff / 180)) for diff in angle_diffs.values()]
+        score = np.mean(similarities) * 100 if similarities else 0
 
         feedback = self._generate_feedback(angle_diffs, angles_aluno, angles_mestre)
         return score, feedback, angle_diffs
 
     def _generate_feedback(self, angle_diffs, angles_aluno, angles_mestre):
+        """Gera feedback consolidado para todos os ângulos com erros significativos."""
         if not angle_diffs:
             return "Movimento Perfeito!"
 
-        max_diff_label = max(angle_diffs, key=angle_diffs.get)
-        max_diff_value = angle_diffs[max_diff_label]
+        error_threshold = 15.0  # Limite de 15 graus para considerar um erro
+        errors = []
 
-        if max_diff_value < 10:
+        for angle_name, diff in angle_diffs.items():
+            if diff > error_threshold:
+                aluno_angle = angles_aluno[angle_name]
+                mestre_angle = angles_mestre[angle_name]
+                readable_label = self.readable_angle_names.get(angle_name, angle_name)
+
+                action = "Aumente" if aluno_angle < mestre_angle else "Diminua"
+                errors.append(f"{action} o ângulo do {readable_label}")
+
+        if not errors:
             return "Excelente movimento!"
 
-        aluno_angle = angles_aluno[max_diff_label]
-        mestre_angle = angles_mestre[max_diff_label]
-        # --- TRADUÇÃO APLICADA AQUI ---
-        readable_label = self.readable_angle_names.get(max_diff_label, max_diff_label)
-
-        feedback = (
-            f"Aumente o ângulo do {readable_label}"
-            if aluno_angle < mestre_angle
-            else f"Diminua o ângulo do {readable_label}"
-        )
-        logger.info(f"Feedback gerado: '{feedback}' para {readable_label}")
+        # Concatena todos os erros em uma única mensagem
+        feedback = ". ".join(errors)
+        logger.info(f"Feedback gerado: '{feedback}'")
         return feedback

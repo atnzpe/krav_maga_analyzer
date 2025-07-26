@@ -166,7 +166,7 @@ class KravMagaApp:
                         spacing=20,
                     ),
                     ft.Container(content=self.status_text, padding=10),
-                    ft.Row(
+                    ft.ResponsiveRow(
                         [
                             ft.Column(
                                 [
@@ -177,6 +177,7 @@ class KravMagaApp:
                                         [self.aluno_placeholder, self.img_aluno_control]
                                     ),
                                 ],
+                                col={"xs": 12, "md": 6},
                                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                             ),
                             ft.Column(
@@ -191,12 +192,12 @@ class KravMagaApp:
                                         ]
                                     ),
                                 ],
+                                col={"xs": 12, "md": 6},
                                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                             ),
                         ],
                         alignment=ft.MainAxisAlignment.CENTER,
                         vertical_alignment=ft.CrossAxisAlignment.START,
-                        spacing=30,
                     ),
                     self.playback_controls,
                     self.report_button,
@@ -243,7 +244,6 @@ class KravMagaApp:
         self.page.update()
 
     def analyze_videos(self, e):
-        """Inicia a análise dos vídeos em uma thread."""
         self.status_text.value = "Análise em andamento..."
         self.analyze_button.disabled = True
         self.aluno_placeholder.content = ft.ProgressRing()
@@ -271,7 +271,6 @@ class KravMagaApp:
             self.page.update()
 
     def setup_ui_post_analysis(self):
-        """Configura a UI após a conclusão da análise."""
         logger.info("Configurando a UI para exibir os resultados.")
         num_frames = len(self.video_analyzer.processed_frames_aluno)
         if num_frames > 0:
@@ -344,7 +343,6 @@ class KravMagaApp:
         for i in range(start_index, num_frames):
             if not self.is_playing:
                 break
-
             self.update_frame_display(i)
             time.sleep(1 / 30)
 
@@ -354,58 +352,60 @@ class KravMagaApp:
         logger.info("Reprodução automática finalizada.")
 
     def prev_frame(self, e):
-        """Vai para o frame anterior."""
         new_index = max(0, int(self.slider_control.value) - 1)
         self.update_frame_display(new_index)
 
     def next_frame(self, e):
-        """Vai para o próximo frame."""
         num_frames = len(self.video_analyzer.processed_frames_aluno)
         new_index = min(num_frames - 1, int(self.slider_control.value) + 1)
         self.update_frame_display(new_index)
 
     def on_generate_report_click(self, e):
         """Abre o diálogo para salvar o arquivo PDF."""
+        # --- GERAÇÃO DE NOME DE ARQUIVO COM TIMESTAMP ---
+        timestamp = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
+        file_name = f"relatorio_krav_maga_{timestamp}.pdf"
         self.save_file_picker.save_file(
             dialog_title="Salvar Relatório de Análise",
-            file_name="relatorio_krav_maga.pdf",
+            file_name=file_name,
             allowed_extensions=["pdf"],
         )
 
     def on_report_saved(self, e: ft.FilePickerResultEvent):
-        """Gera e salva o relatório PDF."""
+        """Gera e salva o relatório PDF com feedback visual colorido."""
         if e.path:
             save_path = e.path
             scores = [res["score"] for res in self.video_analyzer.comparison_results]
 
-            frame_aluno_melhor, frame_mestre_melhor = (
+            frame_aluno_melhor_raw, frame_mestre_melhor_raw = (
                 self.video_analyzer.get_best_frames()
             )
-            frame_aluno_pior, frame_mestre_pior = self.video_analyzer.get_worst_frames()
+            frame_aluno_pior_raw, frame_mestre_pior_raw = (
+                self.video_analyzer.get_worst_frames()
+            )
 
-            if frame_aluno_melhor is not None and frame_aluno_pior is not None:
-                # --- REPROCESSAMENTO DOS FRAMES COM CORES ---
+            if frame_aluno_melhor_raw is not None and frame_aluno_pior_raw is not None:
                 _, frame_aluno_melhor_color = (
                     self.video_analyzer.pose_estimator.estimate_pose(
-                        frame_aluno_melhor,
+                        frame_aluno_melhor_raw,
                         style=self.video_analyzer.pose_estimator.correct_style,
                     )
                 )
                 _, frame_mestre_melhor_color = (
                     self.video_analyzer.pose_estimator.estimate_pose(
-                        frame_mestre_melhor,
+                        frame_mestre_melhor_raw,
                         style=self.video_analyzer.pose_estimator.correct_style,
                     )
                 )
                 _, frame_aluno_pior_color = (
                     self.video_analyzer.pose_estimator.estimate_pose(
-                        frame_aluno_pior,
+                        frame_aluno_pior_raw,
                         style=self.video_analyzer.pose_estimator.incorrect_style,
                     )
                 )
                 _, frame_mestre_pior_color = (
                     self.video_analyzer.pose_estimator.estimate_pose(
-                        frame_mestre_pior,
+                        frame_mestre_pior_raw,
                         style=self.video_analyzer.pose_estimator.incorrect_style,
                     )
                 )
@@ -425,6 +425,13 @@ class KravMagaApp:
                         ft.Text(f"Relatório salvo com sucesso!"),
                         bgcolor=ft.Colors.GREEN,
                     )
+                    # --- ABRIR O ARQUIVO AUTOMATICAMENTE ---
+                    try:
+                        os.startfile(save_path)
+                    except AttributeError:
+                        logger.warning(
+                            "os.startfile() não está disponível neste sistema operacional. O arquivo não será aberto automaticamente."
+                        )
                 else:
                     snack_bar = ft.SnackBar(
                         ft.Text(f"Erro ao salvar relatório: {error_message}"),
@@ -437,7 +444,6 @@ class KravMagaApp:
 
 
 def main(page: ft.Page):
-    """Função de entrada que o Flet chama para iniciar a aplicação."""
     logger.info("Iniciando a aplicação Flet.")
     KravMagaApp(page)
 

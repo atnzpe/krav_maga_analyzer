@@ -61,6 +61,7 @@ class ReportGenerator:
         logger.info("ReportGenerator inicializado com dados de melhor e pior momentos.")
 
     def _add_section_title(self, title):
+        """Adiciona um título de seção padronizado."""
         self.pdf.set_font("Arial", "B", 14)
         self.pdf.cell(0, 10, title, 0, 1, "L")
         self.pdf.line(
@@ -69,6 +70,7 @@ class ReportGenerator:
         self.pdf.ln(5)
 
     def _add_summary(self):
+        """Adiciona a seção de resumo estatístico ao relatório."""
         self._add_section_title("Resumo de Performance")
         if self.scores:
             avg_score, max_score, min_score = (
@@ -98,6 +100,7 @@ class ReportGenerator:
     def _add_moment_analysis(
         self, title, score, feedback, frame_aluno, frame_mestre, temp_suffix
     ):
+        """Função genérica para adicionar uma seção de análise de momento (melhor ou pior)."""
         self._add_section_title(title)
         self.pdf.set_font("Arial", "", 11)
         self.pdf.multi_cell(

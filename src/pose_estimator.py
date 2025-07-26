@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 
 class PoseEstimator:
     """
-    Estima a pose usando MediaPipe Pose.
+    Estima a pose usando MediaPipe Pose e permite desenhar com estilos customizados.
     """
 
     def __init__(self):
@@ -23,18 +23,20 @@ class PoseEstimator:
         )
         self.mp_drawing = mp.solutions.drawing_utils
 
-        # --- NOVOS ESTILOS DE DESENHO ---
+        # --- NOVOS ESTILOS DE DESENHO PARA FEEDBACK VISUAL ---
+        # Cor para conexões (linhas entre os pontos)
+        # Cor para landmarks (os pontos em si)
         self.default_style = self.mp_drawing.DrawingSpec(
             color=(255, 255, 255), thickness=2, circle_radius=2
         )
         self.correct_style = self.mp_drawing.DrawingSpec(
             color=(0, 255, 0), thickness=2, circle_radius=2
-        )
+        )  # Verde
         self.incorrect_style = self.mp_drawing.DrawingSpec(
             color=(0, 0, 255), thickness=2, circle_radius=2
-        )
+        )  # Vermelho
 
-        logger.info("PoseEstimator inicializado.")
+        logger.info("PoseEstimator inicializado com estilos de desenho customizados.")
 
     def estimate_pose(self, image: np.ndarray, style=None):
         """
@@ -50,6 +52,7 @@ class PoseEstimator:
         annotated_image = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
 
         if results.pose_landmarks:
+            # Usa o estilo padrão se nenhum for fornecido, senão usa o estilo customizado
             draw_spec = self.default_style if style is None else style
             self.mp_drawing.draw_landmarks(
                 annotated_image,
