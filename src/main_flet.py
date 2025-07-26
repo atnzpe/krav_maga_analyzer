@@ -384,13 +384,39 @@ class KravMagaApp:
             frame_aluno_pior, frame_mestre_pior = self.video_analyzer.get_worst_frames()
 
             if frame_aluno_melhor is not None and frame_aluno_pior is not None:
+                # --- REPROCESSAMENTO DOS FRAMES COM CORES ---
+                _, frame_aluno_melhor_color = (
+                    self.video_analyzer.pose_estimator.estimate_pose(
+                        frame_aluno_melhor,
+                        style=self.video_analyzer.pose_estimator.correct_style,
+                    )
+                )
+                _, frame_mestre_melhor_color = (
+                    self.video_analyzer.pose_estimator.estimate_pose(
+                        frame_mestre_melhor,
+                        style=self.video_analyzer.pose_estimator.correct_style,
+                    )
+                )
+                _, frame_aluno_pior_color = (
+                    self.video_analyzer.pose_estimator.estimate_pose(
+                        frame_aluno_pior,
+                        style=self.video_analyzer.pose_estimator.incorrect_style,
+                    )
+                )
+                _, frame_mestre_pior_color = (
+                    self.video_analyzer.pose_estimator.estimate_pose(
+                        frame_mestre_pior,
+                        style=self.video_analyzer.pose_estimator.incorrect_style,
+                    )
+                )
+
                 generator = ReportGenerator(
                     scores,
                     self.video_analyzer.comparison_results,
-                    frame_aluno_melhor,
-                    frame_mestre_melhor,
-                    frame_aluno_pior,
-                    frame_mestre_pior,
+                    frame_aluno_melhor_color,
+                    frame_mestre_melhor_color,
+                    frame_aluno_pior_color,
+                    frame_mestre_pior_color,
                 )
                 success, error_message = generator.generate(save_path)
 

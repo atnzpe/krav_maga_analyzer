@@ -12,9 +12,34 @@ from src.utils import get_logger
 logger = get_logger(__name__)
 
 
+class PDF(FPDF):
+    """
+    Classe customizada que herda de FPDF para permitir cabeçalhos e rodapés padronizados.
+    """
+
+    def header(self):
+        self.set_font("Arial", "B", 16)
+        self.cell(0, 10, "Relatório de Análise de Movimento - Krav Maga", 0, 1, "C")
+        self.set_font("Arial", "I", 8)
+        self.cell(
+            0,
+            10,
+            f'Gerado em: {datetime.now().strftime("%d/%m/%Y %H:%M:%S")}',
+            0,
+            1,
+            "C",
+        )
+        self.ln(10)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Arial", "I", 8)
+        self.cell(0, 10, f"Página {self.page_no()}", 0, 0, "C")
+
+
 class ReportGenerator:
     """
-    Gera um relatório de análise em PDF, agora incluindo os melhores e piores momentos.
+    Gera um relatório de análise em PDF com layout aprimorado.
     """
 
     def __init__(
@@ -26,138 +51,80 @@ class ReportGenerator:
         frame_aluno_pior,
         frame_mestre_pior,
     ):
-        """
-        Inicializador do ReportGenerator.
-        Args:
-            scores (list): Lista de pontuações.
-            feedbacks (list): Lista de feedbacks.
-            frame_aluno_melhor (np.ndarray): Frame do aluno no melhor momento.
-            frame_mestre_melhor (np.ndarray): Frame do mestre no melhor momento.
-            frame_aluno_pior (np.ndarray): Frame do aluno no pior momento.
-            frame_mestre_pior (np.ndarray): Frame do mestre no pior momento.
-        """
-        self.scores = scores
+        self.scores = [s for s in scores if s is not None]
         self.feedbacks = feedbacks
         self.frame_aluno_melhor = frame_aluno_melhor
         self.frame_mestre_melhor = frame_mestre_melhor
         self.frame_aluno_pior = frame_aluno_pior
         self.frame_mestre_pior = frame_mestre_pior
-        self.pdf = FPDF()
+        self.pdf = PDF()
         logger.info("ReportGenerator inicializado com dados de melhor e pior momentos.")
 
-    def _add_header(self):
-        """Adiciona o cabeçalho ao documento PDF."""
-        logger.info("Adicionando cabeçalho ao PDF.")
-        self.pdf.set_font("Arial", "B", 16)
-        self.pdf.cell(0, 10, "Relatório de Análise de Movimento - Krav Maga", 0, 1, "C")
-        self.pdf.set_font("Arial", "", 10)
-        now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        self.pdf.cell(0, 10, f"Gerado em: {now}", 0, 1, "C")
-        self.pdf.ln(10)
+    def _add_section_title(self, title):
+        self.pdf.set_font("Arial", "B", 14)
+        self.pdf.cell(0, 10, title, 0, 1, "L")
+        self.pdf.line(
+            self.pdf.get_x(), self.pdf.get_y(), self.pdf.get_x() + 190, self.pdf.get_y()
+        )
+        self.pdf.ln(5)
 
     def _add_summary(self):
-        """Adiciona a seção de resumo estatístico ao relatório."""
-        logger.info("Adicionando resumo estatístico ao PDF.")
-        self.pdf.set_font("Arial", "B", 12)
-        self.pdf.cell(0, 10, "Resumo da Sessão", 0, 1, "L")
-
+        self._add_section_title("Resumo de Performance")
         if self.scores:
-            avg_score = np.mean(self.scores)
-            max_score = np.max(self.scores)
-            min_score = np.min(self.scores)
+            avg_score, max_score, min_score = (
+                np.mean(self.scores),
+                np.max(self.scores),
+                np.min(self.scores),
+            )
         else:
             avg_score, max_score, min_score = 0, 0, 0
-
         self.pdf.set_font("Arial", "", 11)
         self.pdf.cell(
             0, 8, f"Pontuação Média de Similaridade: {avg_score:.2f}%", 0, 1, "L"
         )
-        self.pdf.cell(0, 8, f"Melhor Pontuação Obtida: {max_score:.2f}%", 0, 1, "L")
-        self.pdf.cell(0, 8, f"Pior Pontuação Obtida: {min_score:.2f}%", 0, 1, "L")
+        self.pdf.cell(
+            0, 8, f"Melhor Pontuação Obtida (Destaque): {max_score:.2f}%", 0, 1, "L"
+        )
+        self.pdf.cell(
+            0,
+            8,
+            f"Pior Pontuação Obtida (Ponto de Melhoria): {min_score:.2f}%",
+            0,
+            1,
+            "L",
+        )
         self.pdf.ln(10)
 
-    def _add_key_moment_analysis(self):
-        """Adiciona a análise do momento de melhor execução ao relatório."""
-        logger.info("Adicionando análise do momento de melhor execução ao PDF.")
-        self.pdf.set_font("Arial", "B", 12)
-        self.pdf.cell(0, 10, "Análise do Momento de Melhor Execução", 0, 1, "L")
+    def _add_moment_analysis(
+        self, title, score, feedback, frame_aluno, frame_mestre, temp_suffix
+    ):
+        self._add_section_title(title)
         self.pdf.set_font("Arial", "", 11)
-
-        if self.scores:
-            best_score_index = np.argmax(self.scores)
-            best_feedback = self.feedbacks[best_score_index]["feedback"]
-            best_score = self.scores[best_score_index]
-        else:
-            best_feedback, best_score = "N/A", 0
-
         self.pdf.multi_cell(
             0,
             8,
-            f'No momento de maior similaridade ({best_score:.2f}%), o feedback foi: "{best_feedback}".',
+            f'Com uma pontuação de {score:.2f}%, o feedback foi: "{feedback}".',
             0,
             "L",
         )
         self.pdf.ln(5)
 
-        temp_aluno_path = "temp_aluno_melhor.png"
-        temp_mestre_path = "temp_mestre_melhor.png"
+        temp_aluno_path = f"temp_aluno_{temp_suffix}.png"
+        temp_mestre_path = f"temp_mestre_{temp_suffix}.png"
         try:
-            cv2.imwrite(temp_aluno_path, self.frame_aluno_melhor)
-            cv2.imwrite(temp_mestre_path, self.frame_mestre_melhor)
+            cv2.imwrite(temp_aluno_path, frame_aluno)
+            cv2.imwrite(temp_mestre_path, frame_mestre)
 
-            self.pdf.image(temp_aluno_path, x=20, w=80)
-            self.pdf.image(temp_mestre_path, x=110, w=80)
+            image_y_pos = self.pdf.get_y()
+            self.pdf.image(temp_aluno_path, x=20, y=image_y_pos, w=80)
+            self.pdf.image(temp_mestre_path, x=110, y=image_y_pos, w=80)
             self.pdf.ln(85)
 
-            self.pdf.set_x(20)
+            self.pdf.set_font("Arial", "I", 9)
+            self.pdf.set_xy(20, image_y_pos + 80)
             self.pdf.cell(80, 10, "Sua Execução (Aluno)", 0, 0, "C")
-            self.pdf.cell(90, 10, "Execução de Referência (Mestre)", 0, 1, "C")
-
-        finally:
-            if os.path.exists(temp_aluno_path):
-                os.remove(temp_aluno_path)
-            if os.path.exists(temp_mestre_path):
-                os.remove(temp_mestre_path)
-
-    def _add_worst_moment_analysis(self):
-        """Adiciona a análise do momento de pior execução ao relatório."""
-        logger.info("Adicionando análise do momento de pior execução ao PDF.")
-        self.pdf.set_font("Arial", "B", 12)
-        self.pdf.cell(
-            0, 10, "Análise do Momento a ser Melhorado (Pior Execução)", 0, 1, "L"
-        )
-        self.pdf.set_font("Arial", "", 11)
-
-        if self.scores:
-            worst_score_index = np.argmin(self.scores)
-            worst_feedback = self.feedbacks[worst_score_index]["feedback"]
-            worst_score = self.scores[worst_score_index]
-        else:
-            worst_feedback, worst_score = "N/A", 0
-
-        self.pdf.multi_cell(
-            0,
-            8,
-            f'No momento de menor similaridade ({worst_score:.2f}%), o feedback foi: "{worst_feedback}". Este é um ponto chave para focar no seu treinamento.',
-            0,
-            "L",
-        )
-        self.pdf.ln(5)
-
-        temp_aluno_path = "temp_aluno_pior.png"
-        temp_mestre_path = "temp_mestre_pior.png"
-        try:
-            cv2.imwrite(temp_aluno_path, self.frame_aluno_pior)
-            cv2.imwrite(temp_mestre_path, self.frame_mestre_pior)
-
-            self.pdf.image(temp_aluno_path, x=20, w=80)
-            self.pdf.image(temp_mestre_path, x=110, w=80)
-            self.pdf.ln(85)
-
-            self.pdf.set_x(20)
-            self.pdf.cell(80, 10, "Sua Execução (Aluno)", 0, 0, "C")
-            self.pdf.cell(90, 10, "Execução de Referência (Mestre)", 0, 1, "C")
-
+            self.pdf.set_xy(110, image_y_pos + 80)
+            self.pdf.cell(80, 10, "Execução de Referência (Mestre)", 0, 1, "C")
         finally:
             if os.path.exists(temp_aluno_path):
                 os.remove(temp_aluno_path)
@@ -165,21 +132,37 @@ class ReportGenerator:
                 os.remove(temp_mestre_path)
 
     def generate(self, output_path):
-        """
-        Gera e salva o arquivo PDF completo, agora com ambas as seções.
-        """
+        """Gera e salva o arquivo PDF completo."""
         try:
             logger.info(f"Iniciando a geração do PDF para: {output_path}")
             self.pdf.add_page()
-            self._add_header()
             self._add_summary()
-            self._add_key_moment_analysis()
-            self.pdf.add_page()
-            self._add_worst_moment_analysis()
+
+            best_score_index = np.argmax(self.scores)
+            self._add_moment_analysis(
+                "Destaque da Sessão (Melhor Execução)",
+                self.scores[best_score_index],
+                self.feedbacks[best_score_index]["feedback"],
+                self.frame_aluno_melhor,
+                self.frame_mestre_melhor,
+                "melhor",
+            )
+
+            self.pdf.ln(10)
+
+            worst_score_index = np.argmin(self.scores)
+            self._add_moment_analysis(
+                "Ponto de Melhoria (Pior Execução)",
+                self.scores[worst_score_index],
+                self.feedbacks[worst_score_index]["feedback"],
+                self.frame_aluno_pior,
+                self.frame_mestre_pior,
+                "pior",
+            )
 
             self.pdf.output(output_path)
             logger.info(f"Relatório PDF gerado com sucesso em: {output_path}")
             return True, None
         except Exception as e:
-            logger.error(f"Falha ao gerar o relatório PDF: {e}")
+            logger.error(f"Falha ao gerar o relatório PDF: {e}", exc_info=True)
             return False, str(e)
