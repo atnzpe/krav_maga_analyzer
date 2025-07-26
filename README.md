@@ -6,9 +6,9 @@ O Krav Maga Movement Analyzer é uma aplicação inovadora projetada para auxili
 
 A interface do usuário é construída com [Flet](https://flet.dev/), uma estrutura que permite a criação de aplicativos web, desktop e móveis com Python.
 
-# Analisador de Movimentos de Krav Maga
+## Analisador de Movimentos de Krav Maga
 
-**Versão:** 1.10.0
+**Versão:** 1.11.0
 
 Uma aplicação de desktop para análise e aprimoramento de técnicas de Krav Maga utilizando Visão Computacional, MediaPipe e Flet.
 
@@ -19,7 +19,7 @@ Uma aplicação de desktop para análise e aprimoramento de técnicas de Krav Ma
 - **Detecção de Pose:** Utiliza o Google MediaPipe para rastrear os principais pontos do corpo.
 - **Controles de Reprodução Completos:** Play/Pause, navegação frame a frame e slider interativo.
 - **Feedback em Tempo Real:** Receba uma pontuação de similaridade e dicas de correção para cada frame.
-- **✨ NOVO: Geração de Relatório em PDF:** Exporte um resumo profissional da sua análise para salvar, imprimir ou compartilhar.
+- **✨ Geração de Relatório em PDF Aprimorada:** Exporte um resumo profissional da sua análise que agora inclui os **melhores e piores momentos** do movimento, com imagens e feedback para cada um.
 
 ## Tecnologias Utilizadas
 
@@ -37,8 +37,8 @@ Uma aplicação de desktop para análise e aprimoramento de técnicas de Krav Ma
 2.  Carregue os vídeos do aluno e do mestre.
 3.  Clique em "Analisar Movimentos".
 4.  Aguarde o processamento.
-5.  Use os controles de reprodução para analisar os movimentos.
-6.  **Clique em "Gerar Relatório PDF" para salvar seu resumo.**
+5.  Use os controles de reprodução para analisar os movimentos em detalhe.
+6.  Clique em "Gerar Relatório PDF" para salvar seu resumo completo.
 
 ## Como Instalar e Rodar
 
