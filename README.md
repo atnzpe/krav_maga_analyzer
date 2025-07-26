@@ -8,7 +8,7 @@ A interface do usuário é construída com [Flet](https://flet.dev/), uma estrut
 
 # Analisador de Movimentos de Krav Maga
 
-**Versão:** 1.12.0
+**Versão:** 1.13.0
 
 Uma aplicação de desktop para análise e aprimoramento de técnicas de Krav Maga utilizando Visão Computacional, MediaPipe e Flet.
 
@@ -23,6 +23,8 @@ Uma aplicação de desktop para análise e aprimoramento de técnicas de Krav Ma
     - **Totalmente em Português:** Feedbacks e legendas traduzidas.
     - **Feedback Visual:** Esqueletos coloridos destacam os acertos (verde) e os pontos de melhoria (vermelho).
     - **Layout Profissional:** Resumo estatístico, imagens lado a lado e design claro.
+    - **Nome de Arquivo com Data/Hora:** O relatório é salvo com um nome de arquivo único.
+    - **Abertura Automática:** O PDF é aberto automaticamente após ser gerado.
 
 ## Tecnologias Utilizadas
 
@@ -34,14 +36,14 @@ Uma aplicação de desktop para análise e aprimoramento de técnicas de Krav Ma
 - **scikit-learn**
 - **fpdf2**
 
-# Como Usar
+## Como Usar
 
 1.  Execute a aplicação.
 2.  Carregue os vídeos do aluno e do mestre.
 3.  Clique em "Analisar Movimentos".
 4.  Aguarde o processamento.
 5.  Use os controles de reprodução para analisar os movimentos em detalhe.
-6.  Clique em "Gerar Relatório PDF" para salvar seu resumo completo e visualmente aprimorado.
+6.  Clique em "Gerar Relatório PDF" para salvar e visualizar seu resumo completo e aprimorado.
 
 ## Como Instalar e Rodar
 
