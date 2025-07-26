@@ -10,12 +10,13 @@ pytest-mock
 pytest-asyncio
 fpdf2
 albumentations
-
+flet
+opencv-python
 mediapipe
+numpy
+scikit-learn
+fpdf2
 
-opencv_contrib_python
-opencv_python
-openvino
 
 
 

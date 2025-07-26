@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from src.utils import setup_logging, get_logger
 from src.video_analyzer import VideoAnalyzer
+from src.report_generator import ReportGenerator
 
 setup_logging()
 logger = get_logger(__name__)
@@ -109,11 +110,21 @@ class KravMagaApp:
             alignment=ft.MainAxisAlignment.CENTER,
         )
 
+        self.report_button = ft.ElevatedButton(
+            "Gerar Relatório PDF",
+            icon=ft.Icons.PICTURE_AS_PDF,
+            on_click=self.on_generate_report_click,
+            visible=False,
+        )
+
         self.file_picker_aluno = ft.FilePicker(on_result=self.on_pick_file_result_aluno)
         self.file_picker_mestre = ft.FilePicker(
             on_result=self.on_pick_file_result_mestre
         )
-        self.page.overlay.extend([self.file_picker_aluno, self.file_picker_mestre])
+        self.save_file_picker = ft.FilePicker(on_result=self.on_report_saved)
+        self.page.overlay.extend(
+            [self.file_picker_aluno, self.file_picker_mestre, self.save_file_picker]
+        )
 
     def build_layout(self):
         """Constrói o layout visual da aplicação."""
@@ -188,6 +199,7 @@ class KravMagaApp:
                         spacing=30,
                     ),
                     self.playback_controls,
+                    self.report_button,
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=15,
@@ -267,6 +279,7 @@ class KravMagaApp:
             self.slider_control.divisions = num_frames - 1 if num_frames > 1 else 1
             self.slider_control.disabled = False
             self.playback_controls.visible = True
+            self.report_button.visible = True
 
             self.status_text.value = "Análise completa! Use os controles abaixo."
             self.update_frame_display(0)
@@ -350,6 +363,45 @@ class KravMagaApp:
         num_frames = len(self.video_analyzer.processed_frames_aluno)
         new_index = min(num_frames - 1, int(self.slider_control.value) + 1)
         self.update_frame_display(new_index)
+
+    def on_generate_report_click(self, e):
+        """Abre o diálogo para salvar o arquivo PDF."""
+        self.save_file_picker.save_file(
+            dialog_title="Salvar Relatório de Análise",
+            file_name="relatorio_krav_maga.pdf",
+            allowed_extensions=["pdf"],
+        )
+
+    def on_report_saved(self, e: ft.FilePickerResultEvent):
+        """Gera e salva o relatório PDF."""
+        if e.path:
+            save_path = e.path
+            scores = [res["score"] for res in self.video_analyzer.comparison_results]
+            frame_aluno, frame_mestre = self.video_analyzer.get_best_frames()
+
+            if frame_aluno is not None:
+                generator = ReportGenerator(
+                    scores,
+                    self.video_analyzer.comparison_results,
+                    frame_aluno,
+                    frame_mestre,
+                )
+                success, error_message = generator.generate(save_path)
+
+                if success:
+                    snack_bar = ft.SnackBar(
+                        ft.Text(f"Relatório salvo com sucesso!"),
+                        bgcolor=ft.Colors.GREEN,
+                    )
+                else:
+                    snack_bar = ft.SnackBar(
+                        ft.Text(f"Erro ao salvar relatório: {error_message}"),
+                        bgcolor=ft.Colors.RED,
+                    )
+
+                self.page.snack_bar = snack_bar
+                self.page.snack_bar.open = True
+                self.page.update()
 
 
 def main(page: ft.Page):
