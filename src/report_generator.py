@@ -1,8 +1,5 @@
 # src/report_generator.py
 
-# --------------------------------------------------------------------------------------------------
-# Importação de Bibliotecas
-# --------------------------------------------------------------------------------------------------
 import logging
 import os
 from datetime import datetime
@@ -10,39 +7,43 @@ import numpy as np
 from fpdf import FPDF
 import cv2
 
-# --- Importação dos Módulos do Projeto ---
 from src.utils import get_logger
 
-# --------------------------------------------------------------------------------------------------
-# Configuração do Logging
-# --------------------------------------------------------------------------------------------------
 logger = get_logger(__name__)
 
 
-# --------------------------------------------------------------------------------------------------
-# Classe Geradora de Relatório
-# --------------------------------------------------------------------------------------------------
 class ReportGenerator:
     """
-    Classe responsável por gerar um relatório de análise em formato PDF.
+    Gera um relatório de análise em PDF, agora incluindo os melhores e piores momentos.
     """
 
-    def __init__(self, scores, feedbacks, frame_aluno, frame_mestre):
+    def __init__(
+        self,
+        scores,
+        feedbacks,
+        frame_aluno_melhor,
+        frame_mestre_melhor,
+        frame_aluno_pior,
+        frame_mestre_pior,
+    ):
         """
-        Inicializador da classe ReportGenerator.
-
+        Inicializador do ReportGenerator.
         Args:
-            scores (list): Lista com as pontuações de similaridade de cada frame.
-            feedbacks (list): Lista com os feedbacks textuais de cada frame.
-            frame_aluno (numpy.ndarray): O frame do aluno com a melhor pontuação.
-            frame_mestre (numpy.ndarray): O frame do mestre correspondente.
+            scores (list): Lista de pontuações.
+            feedbacks (list): Lista de feedbacks.
+            frame_aluno_melhor (np.ndarray): Frame do aluno no melhor momento.
+            frame_mestre_melhor (np.ndarray): Frame do mestre no melhor momento.
+            frame_aluno_pior (np.ndarray): Frame do aluno no pior momento.
+            frame_mestre_pior (np.ndarray): Frame do mestre no pior momento.
         """
         self.scores = scores
         self.feedbacks = feedbacks
-        self.frame_aluno = frame_aluno
-        self.frame_mestre = frame_mestre
+        self.frame_aluno_melhor = frame_aluno_melhor
+        self.frame_mestre_melhor = frame_mestre_melhor
+        self.frame_aluno_pior = frame_aluno_pior
+        self.frame_mestre_pior = frame_mestre_pior
         self.pdf = FPDF()
-        logger.info("ReportGenerator inicializado com os dados da análise.")
+        logger.info("ReportGenerator inicializado com dados de melhor e pior momentos.")
 
     def _add_header(self):
         """Adiciona o cabeçalho ao documento PDF."""
@@ -76,8 +77,8 @@ class ReportGenerator:
         self.pdf.ln(10)
 
     def _add_key_moment_analysis(self):
-        """Adiciona a análise do momento chave (melhor pontuação) ao relatório."""
-        logger.info("Adicionando análise do momento chave ao PDF.")
+        """Adiciona a análise do momento de melhor execução ao relatório."""
+        logger.info("Adicionando análise do momento de melhor execução ao PDF.")
         self.pdf.set_font("Arial", "B", 12)
         self.pdf.cell(0, 10, "Análise do Momento de Melhor Execução", 0, 1, "L")
         self.pdf.set_font("Arial", "", 11)
@@ -98,11 +99,11 @@ class ReportGenerator:
         )
         self.pdf.ln(5)
 
-        temp_aluno_path = "temp_aluno.png"
-        temp_mestre_path = "temp_mestre.png"
+        temp_aluno_path = "temp_aluno_melhor.png"
+        temp_mestre_path = "temp_mestre_melhor.png"
         try:
-            cv2.imwrite(temp_aluno_path, self.frame_aluno)
-            cv2.imwrite(temp_mestre_path, self.frame_mestre)
+            cv2.imwrite(temp_aluno_path, self.frame_aluno_melhor)
+            cv2.imwrite(temp_mestre_path, self.frame_mestre_melhor)
 
             self.pdf.image(temp_aluno_path, x=20, w=80)
             self.pdf.image(temp_mestre_path, x=110, w=80)
@@ -112,11 +113,51 @@ class ReportGenerator:
             self.pdf.cell(80, 10, "Sua Execução (Aluno)", 0, 0, "C")
             self.pdf.cell(90, 10, "Execução de Referência (Mestre)", 0, 1, "C")
 
-        except Exception as e:
-            logger.error(f"Erro ao adicionar imagens ao PDF: {e}")
-            self.pdf.cell(
-                0, 10, "Erro ao processar as imagens do momento chave.", 0, 1, "L"
-            )
+        finally:
+            if os.path.exists(temp_aluno_path):
+                os.remove(temp_aluno_path)
+            if os.path.exists(temp_mestre_path):
+                os.remove(temp_mestre_path)
+
+    def _add_worst_moment_analysis(self):
+        """Adiciona a análise do momento de pior execução ao relatório."""
+        logger.info("Adicionando análise do momento de pior execução ao PDF.")
+        self.pdf.set_font("Arial", "B", 12)
+        self.pdf.cell(
+            0, 10, "Análise do Momento a ser Melhorado (Pior Execução)", 0, 1, "L"
+        )
+        self.pdf.set_font("Arial", "", 11)
+
+        if self.scores:
+            worst_score_index = np.argmin(self.scores)
+            worst_feedback = self.feedbacks[worst_score_index]["feedback"]
+            worst_score = self.scores[worst_score_index]
+        else:
+            worst_feedback, worst_score = "N/A", 0
+
+        self.pdf.multi_cell(
+            0,
+            8,
+            f'No momento de menor similaridade ({worst_score:.2f}%), o feedback foi: "{worst_feedback}". Este é um ponto chave para focar no seu treinamento.',
+            0,
+            "L",
+        )
+        self.pdf.ln(5)
+
+        temp_aluno_path = "temp_aluno_pior.png"
+        temp_mestre_path = "temp_mestre_pior.png"
+        try:
+            cv2.imwrite(temp_aluno_path, self.frame_aluno_pior)
+            cv2.imwrite(temp_mestre_path, self.frame_mestre_pior)
+
+            self.pdf.image(temp_aluno_path, x=20, w=80)
+            self.pdf.image(temp_mestre_path, x=110, w=80)
+            self.pdf.ln(85)
+
+            self.pdf.set_x(20)
+            self.pdf.cell(80, 10, "Sua Execução (Aluno)", 0, 0, "C")
+            self.pdf.cell(90, 10, "Execução de Referência (Mestre)", 0, 1, "C")
+
         finally:
             if os.path.exists(temp_aluno_path):
                 os.remove(temp_aluno_path)
@@ -125,7 +166,7 @@ class ReportGenerator:
 
     def generate(self, output_path):
         """
-        Gera e salva o arquivo PDF completo.
+        Gera e salva o arquivo PDF completo, agora com ambas as seções.
         """
         try:
             logger.info(f"Iniciando a geração do PDF para: {output_path}")
@@ -133,6 +174,8 @@ class ReportGenerator:
             self._add_header()
             self._add_summary()
             self._add_key_moment_analysis()
+            self.pdf.add_page()
+            self._add_worst_moment_analysis()
 
             self.pdf.output(output_path)
             logger.info(f"Relatório PDF gerado com sucesso em: {output_path}")

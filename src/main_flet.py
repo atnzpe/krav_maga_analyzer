@@ -377,14 +377,20 @@ class KravMagaApp:
         if e.path:
             save_path = e.path
             scores = [res["score"] for res in self.video_analyzer.comparison_results]
-            frame_aluno, frame_mestre = self.video_analyzer.get_best_frames()
 
-            if frame_aluno is not None:
+            frame_aluno_melhor, frame_mestre_melhor = (
+                self.video_analyzer.get_best_frames()
+            )
+            frame_aluno_pior, frame_mestre_pior = self.video_analyzer.get_worst_frames()
+
+            if frame_aluno_melhor is not None and frame_aluno_pior is not None:
                 generator = ReportGenerator(
                     scores,
                     self.video_analyzer.comparison_results,
-                    frame_aluno,
-                    frame_mestre,
+                    frame_aluno_melhor,
+                    frame_mestre_melhor,
+                    frame_aluno_pior,
+                    frame_mestre_pior,
                 )
                 success, error_message = generator.generate(save_path)
 

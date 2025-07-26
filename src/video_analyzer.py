@@ -5,6 +5,7 @@ import os
 import tempfile
 import threading
 import logging
+import numpy as np
 from src.utils import get_logger
 from src.pose_estimator import PoseEstimator
 from src.motion_comparator import MotionComparator
@@ -148,6 +149,70 @@ class VideoAnalyzer:
             if self.cap_mestre:
                 self.cap_mestre.release()
             logger.info("Thread de análise finalizada.")
+
+    def get_best_frames(self):
+        """
+        Encontra e retorna os frames (aluno e mestre) correspondentes à maior pontuação.
+        """
+        logger.info("Buscando os frames com a melhor pontuação para o relatório.")
+        if not self.comparison_results:
+            return None, None
+
+        try:
+            scores = [res["score"] for res in self.comparison_results]
+            best_frame_index = np.argmax(scores)
+
+            cap_aluno = cv2.VideoCapture(self.video_aluno_path)
+            cap_mestre = cv2.VideoCapture(self.video_mestre_path)
+
+            cap_aluno.set(cv2.CAP_PROP_POS_FRAMES, best_frame_index)
+            cap_mestre.set(cv2.CAP_PROP_POS_FRAMES, best_frame_index)
+
+            ret_aluno, frame_aluno = cap_aluno.read()
+            ret_mestre, frame_mestre = cap_mestre.read()
+
+            cap_aluno.release()
+            cap_mestre.release()
+
+            if ret_aluno and ret_mestre:
+                return frame_aluno, frame_mestre
+            else:
+                return None, None
+        except Exception as e:
+            logger.error(f"Erro ao recuperar os melhores frames: {e}")
+            return None, None
+
+    def get_worst_frames(self):
+        """
+        Encontra e retorna os frames (aluno e mestre) correspondentes à menor pontuação.
+        """
+        logger.info("Buscando os frames com a pior pontuação para o relatório.")
+        if not self.comparison_results:
+            return None, None
+
+        try:
+            scores = [res["score"] for res in self.comparison_results]
+            worst_frame_index = np.argmin(scores)
+
+            cap_aluno = cv2.VideoCapture(self.video_aluno_path)
+            cap_mestre = cv2.VideoCapture(self.video_mestre_path)
+
+            cap_aluno.set(cv2.CAP_PROP_POS_FRAMES, worst_frame_index)
+            cap_mestre.set(cv2.CAP_PROP_POS_FRAMES, worst_frame_index)
+
+            ret_aluno, frame_aluno = cap_aluno.read()
+            ret_mestre, frame_mestre = cap_mestre.read()
+
+            cap_aluno.release()
+            cap_mestre.release()
+
+            if ret_aluno and ret_mestre:
+                return frame_aluno, frame_mestre
+            else:
+                return None, None
+        except Exception as e:
+            logger.error(f"Erro ao recuperar os piores frames: {e}")
+            return None, None
 
     def __del__(self):
         """Limpa os arquivos temporários."""
