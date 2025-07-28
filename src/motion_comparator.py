@@ -14,7 +14,12 @@ class MotionComparator:
     """
 
     def __init__(self):
+        """
+        Construtor da classe MotionComparator.
+        Define os ângulos chave para a análise e seus nomes legíveis.
+        """
         logger.info("Inicializando MotionComparator.")
+        # Define as articulações (vértices) e os pontos que formam os ângulos.
         self.KEY_ANGLES = {
             "LEFT_ELBOW_ANGLE": ("LEFT_SHOULDER", "LEFT_ELBOW", "LEFT_WRIST"),
             "RIGHT_ELBOW_ANGLE": ("RIGHT_SHOULDER", "RIGHT_ELBOW", "RIGHT_WRIST"),
@@ -25,21 +30,12 @@ class MotionComparator:
             "LEFT_HIP_ANGLE": ("LEFT_SHOULDER", "LEFT_HIP", "LEFT_KNEE"),
             "RIGHT_HIP_ANGLE": ("RIGHT_SHOULDER", "RIGHT_HIP", "RIGHT_KNEE"),
         }
+        # Mapeia os nomes dos landmarks para seus índices numéricos no MediaPipe.
         self.landmark_indices = {
-            "LEFT_SHOULDER": mp.solutions.pose.PoseLandmark.LEFT_SHOULDER.value,
-            "RIGHT_SHOULDER": mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER.value,
-            "LEFT_ELBOW": mp.solutions.pose.PoseLandmark.LEFT_ELBOW.value,
-            "RIGHT_ELBOW": mp.solutions.pose.PoseLandmark.RIGHT_ELBOW.value,
-            "LEFT_WRIST": mp.solutions.pose.PoseLandmark.LEFT_WRIST.value,
-            "RIGHT_WRIST": mp.solutions.pose.PoseLandmark.RIGHT_WRIST.value,
-            "LEFT_HIP": mp.solutions.pose.PoseLandmark.LEFT_HIP.value,
-            "RIGHT_HIP": mp.solutions.pose.PoseLandmark.RIGHT_HIP.value,
-            "LEFT_KNEE": mp.solutions.pose.PoseLandmark.LEFT_KNEE.value,
-            "RIGHT_KNEE": mp.solutions.pose.PoseLandmark.RIGHT_KNEE.value,
-            "LEFT_ANKLE": mp.solutions.pose.PoseLandmark.LEFT_ANKLE.value,
-            "RIGHT_ANKLE": mp.solutions.pose.PoseLandmark.RIGHT_ANKLE.value,
+            name: landmark.value
+            for name, landmark in mp.solutions.pose.PoseLandmark.__members__.items()
         }
-        # --- DICIONÁRIO DE TRADUÇÃO ---
+        # Dicionário para traduzir os nomes dos ângulos para o relatório em português.
         self.readable_angle_names = {
             "LEFT_ELBOW_ANGLE": "Cotovelo Esquerdo",
             "RIGHT_ELBOW_ANGLE": "Cotovelo Direito",
@@ -53,45 +49,69 @@ class MotionComparator:
         logger.info(f"Ângulos chave definidos: {list(self.KEY_ANGLES.keys())}")
 
     def _get_landmark_coords(self, landmarks_data: list, name: str) -> dict:
-        idx = self.landmark_indices.get(name)
-        if idx is None or not landmarks_data or idx >= len(landmarks_data):
+        """Função auxiliar para encontrar um landmark pelo nome na lista."""
+        if not landmarks_data:
+            raise ValueError(f"Lista de landmarks está vazia.")
+        # Procura o dicionário do landmark pelo seu nome.
+        landmark = next((lm for lm in landmarks_data if lm["name"] == name), None)
+        if landmark is None:
             raise ValueError(f"Landmark '{name}' não encontrado.")
-        return landmarks_data[idx]
+        return landmark
 
-    def compare_poses(self, aluno_landmarks, mestre_landmarks):
-        if not aluno_landmarks or not mestre_landmarks:
+    def compare_poses(self, aluno_landmarks_list, mestre_landmarks_list):
+        """
+        Compara as poses de aluno e mestre, frame a frame, com lógica aprimorada
+        para lidar com landmarks de baixa visibilidade.
+        """
+        # Se uma das poses não foi detectada, retorna um estado neutro.
+        if not aluno_landmarks_list or not mestre_landmarks_list:
             return 0.0, "Aguardando pose...", {}
 
         angles_aluno, angles_mestre, angle_diffs = {}, {}, {}
+
+        # Itera sobre cada ângulo que definimos como importante.
         for angle_name, (p1, p2, p3) in self.KEY_ANGLES.items():
             try:
-                aluno_p1, aluno_p2, aluno_p3 = (
-                    self._get_landmark_coords(aluno_landmarks, p) for p in (p1, p2, p3)
+                # Calcula o ângulo para o aluno.
+                aluno_angle = calculate_angle(
+                    self._get_landmark_coords(aluno_landmarks_list, p1),
+                    self._get_landmark_coords(aluno_landmarks_list, p2),
+                    self._get_landmark_coords(aluno_landmarks_list, p3),
                 )
-                mestre_p1, mestre_p2, mestre_p3 = (
-                    self._get_landmark_coords(mestre_landmarks, p) for p in (p1, p2, p3)
-                )
+                angles_aluno[angle_name] = aluno_angle
 
-                angles_aluno[angle_name] = calculate_angle(aluno_p1, aluno_p2, aluno_p3)
-                angles_mestre[angle_name] = calculate_angle(
-                    mestre_p1, mestre_p2, mestre_p3
+                # Calcula o ângulo para o mestre.
+                mestre_angle = calculate_angle(
+                    self._get_landmark_coords(mestre_landmarks_list, p1),
+                    self._get_landmark_coords(mestre_landmarks_list, p2),
+                    self._get_landmark_coords(mestre_landmarks_list, p3),
                 )
-                angle_diffs[angle_name] = abs(
-                    angles_aluno[angle_name] - angles_mestre[angle_name]
-                )
-            except ValueError:
+                angles_mestre[angle_name] = mestre_angle
+
+                # --- LÓGICA DE CORREÇÃO ---
+                # Se algum dos ângulos for 0.0 (indicando baixa visibilidade),
+                # a diferença é considerada 0 para não gerar um "falso negativo".
+                # A penalidade só ocorre se ambos os ângulos forem válidos e diferentes.
+                if aluno_angle == 0.0 or mestre_angle == 0.0:
+                    angle_diffs[angle_name] = 0.0
+                else:
+                    angle_diffs[angle_name] = abs(aluno_angle - mestre_angle)
+
+            except ValueError as e:
+                # Se um landmark não for encontrado, trata como erro e assume a pior diferença.
+                logger.warning(f"Não foi possível calcular o ângulo {angle_name}: {e}")
                 (
                     angles_aluno[angle_name],
                     angles_mestre[angle_name],
                     angle_diffs[angle_name],
                 ) = (0, 0, 180)
 
-        # --- LÓGICA DE PONTUAÇÃO REFINADA ---
-        # A pontuação agora é baseada na média da similaridade de cada ângulo.
-        # Similaridade de 100% significa 0 graus de diferença. 0% significa 180 graus.
+        # A lógica de pontuação é baseada na média da similaridade de cada ângulo.
+        # Similaridade = 100% para 0 graus de diferença, 0% para 180 graus.
         similarities = [max(0, 1 - (diff / 180)) for diff in angle_diffs.values()]
         score = np.mean(similarities) * 100 if similarities else 0
 
+        # Gera o feedback textual com base nas diferenças calculadas.
         feedback = self._generate_feedback(angle_diffs, angles_aluno, angles_mestre)
         return score, feedback, angle_diffs
 
@@ -100,22 +120,23 @@ class MotionComparator:
         if not angle_diffs:
             return "Movimento Perfeito!"
 
-        error_threshold = 15.0  # Limite de 15 graus para considerar um erro
+        error_threshold = 15.0  # Limite de 15 graus para considerar um erro.
         errors = []
 
         for angle_name, diff in angle_diffs.items():
             if diff > error_threshold:
-                aluno_angle = angles_aluno[angle_name]
-                mestre_angle = angles_mestre[angle_name]
+                aluno_angle = angles_aluno.get(angle_name, 0)
+                mestre_angle = angles_mestre.get(angle_name, 0)
                 readable_label = self.readable_angle_names.get(angle_name, angle_name)
 
-                action = "Aumente" if aluno_angle < mestre_angle else "Diminua"
-                errors.append(f"{action} o ângulo do {readable_label}")
+                # Só gera feedback se ambos os ângulos forem válidos (diferentes de 0).
+                if aluno_angle > 0 and mestre_angle > 0:
+                    action = "Aumente" if aluno_angle < mestre_angle else "Diminua"
+                    errors.append(f"{action} o ângulo do {readable_label}")
 
         if not errors:
             return "Excelente movimento!"
 
-        # Concatena todos os erros em uma única mensagem
         feedback = ". ".join(errors)
         logger.info(f"Feedback gerado: '{feedback}'")
         return feedback
