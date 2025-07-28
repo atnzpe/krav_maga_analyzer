@@ -477,46 +477,89 @@ class KravMagaApp:
             allowed_extensions=["pdf"],
         )
 
-    def on_report_saved(self, e: ft.FilePickerResultEvent):
-        """Gera e salva o relatório PDF após o usuário escolher o local."""
+     def on_report_saved(self, e: ft.FilePickerResultEvent):
+        """
+        Gera e salva o relatório PDF com feedback visual colorido e detalhado.
+        """
         if not e.path:
             logger.warning("Operação de salvar relatório foi cancelada pelo usuário.")
             return
 
         save_path = e.path
-        logger.info(f"Tentando salvar relatório em: {save_path}")
+        logger.info(f"Iniciando geração do relatório PDF para: {save_path}")
 
-        scores = [res["score"] for res in self.video_analyzer.comparison_results]
-        frame_aluno_melhor, frame_mestre_melhor = self.video_analyzer.get_best_frames()
-        frame_aluno_pior, frame_mestre_pior = self.video_analyzer.get_worst_frames()
+        try:
+            # Pega todos os scores da análise.
+            scores = [res["score"] for res in self.video_analyzer.comparison_results]
+            
+            # Encontra o índice do melhor e do pior frame.
+            best_frame_index = np.argmax(scores)
+            worst_frame_index = np.argmin(scores)
+            logger.info(f"Melhor frame (índice {best_frame_index}) e pior frame (índice {worst_frame_index}) identificados.")
 
-        if frame_aluno_melhor is not None and frame_aluno_pior is not None:
+            # --- GERAÇÃO DAS IMAGENS DE FEEDBACK PARA O PDF ---
+
+            # Pega os dados brutos (frames, landmarks, diffs) para o MELHOR momento.
+            best_frame_aluno_raw = self.video_analyzer.raw_frames_aluno[best_frame_index]
+            best_frame_mestre_raw = self.video_analyzer.raw_frames_mestre[best_frame_index]
+            best_landmarks_aluno = self.video_analyzer.aluno_landmarks[best_frame_index]
+            best_diffs = self.video_analyzer.comparison_results[best_frame_index]['diffs']
+
+            # Pega os dados brutos para o PIOR momento.
+            worst_frame_aluno_raw = self.video_analyzer.raw_frames_aluno[worst_frame_index]
+            worst_frame_mestre_raw = self.video_analyzer.raw_frames_mestre[worst_frame_index]
+            worst_landmarks_aluno = self.video_analyzer.aluno_landmarks[worst_frame_index]
+            worst_diffs = self.video_analyzer.comparison_results[worst_frame_index]['diffs']
+
+            # Desenha os esqueletos de feedback (vermelho/verde) para o MELHOR momento.
+            frame_aluno_melhor_feedback = self.video_analyzer.pose_estimator.draw_feedback_skeleton(
+                best_frame_aluno_raw, best_landmarks_aluno, best_diffs, self.video_analyzer.motion_comparator.KEY_ANGLES
+            )
+            # O esqueleto do mestre é sempre desenhado com o estilo padrão (branco) no relatório.
+            frame_mestre_melhor_feedback = self.video_analyzer.pose_estimator.draw_skeleton_by_side(
+                best_frame_mestre_raw, self.video_analyzer.mestre_landmarks[best_frame_index]
+            )
+
+            # Desenha os esqueletos de feedback para o PIOR momento.
+            frame_aluno_pior_feedback = self.video_analyzer.pose_estimator.draw_feedback_skeleton(
+                worst_frame_aluno_raw, worst_landmarks_aluno, worst_diffs, self.video_analyzer.motion_comparator.KEY_ANGLES
+            )
+            frame_mestre_pior_feedback = self.video_analyzer.pose_estimator.draw_skeleton_by_side(
+                worst_frame_mestre_raw, self.video_analyzer.mestre_landmarks[worst_frame_index]
+            )
+            logger.info("Imagens de feedback com esqueletos coloridos (vermelho/verde) foram geradas.")
+
+            # Cria o gerador de relatório com os dados e imagens processados.
             generator = ReportGenerator(
-                scores,
-                self.video_analyzer.comparison_results,
-                frame_aluno_melhor,
-                frame_mestre_melhor,
-                frame_aluno_pior,
-                frame_mestre_pior,
+                scores=scores,
+                feedbacks=self.video_analyzer.comparison_results,
+                frame_aluno_melhor=frame_aluno_melhor_feedback,
+                frame_mestre_melhor=frame_mestre_melhor_feedback,
+                frame_aluno_pior=frame_aluno_pior_feedback,
+                frame_mestre_pior=frame_mestre_pior_feedback,
+                best_angle_diffs=best_diffs, # Passa as diferenças de ângulo
+                worst_angle_diffs=worst_diffs, # Passa as diferenças de ângulo
+                key_angles_map=self.video_analyzer.motion_comparator.readable_angle_names # Passa o mapa de nomes
             )
             success, error_message = generator.generate(save_path)
 
+            # Exibe uma notificação (SnackBar) para o usuário.
             if success:
-                snack_bar = ft.SnackBar(
-                    ft.Text("Relatório salvo com sucesso!"), bgcolor=ft.Colors.GREEN
-                )
+                snack_bar = ft.SnackBar(ft.Text("Relatório salvo com sucesso!"), bgcolor=ft.Colors.GREEN)
                 try:
                     os.startfile(save_path)
-                except Exception as ex:
-                    logger.warning(
-                        f"Não foi possível abrir o arquivo automaticamente: {ex}"
-                    )
+                except Exception:
+                    logger.warning("os.startfile() não disponível. O arquivo não será aberto.")
             else:
-                snack_bar = ft.SnackBar(
-                    ft.Text(f"Erro ao salvar: {error_message}"), bgcolor=ft.Colors.RED
-                )
+                snack_bar = ft.SnackBar(ft.Text(f"Erro ao salvar: {error_message}"), bgcolor=ft.Colors.RED)
 
             self.page.snack_bar = snack_bar
+            self.page.snack_bar.open = True
+            self.page.update()
+
+        except Exception as ex:
+            logger.error(f"Ocorreu um erro inesperado ao gerar o relatório: {ex}", exc_info=True)
+            self.page.snack_bar = ft.SnackBar(ft.Text(f"Erro inesperado: {ex}"), bgcolor=ft.Colors.RED)
             self.page.snack_bar.open = True
             self.page.update()
 
