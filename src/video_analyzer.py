@@ -19,9 +19,6 @@ class VideoAnalyzer:
     """
 
     def __init__(self):
-        """
-        Inicializa o VideoAnalyzer.
-        """
         logger.info("Inicializando VideoAnalyzer...")
         self.pose_estimator = PoseEstimator()
         self.motion_comparator = MotionComparator()
@@ -34,8 +31,14 @@ class VideoAnalyzer:
         self.processed_frames_aluno = []
         self.processed_frames_mestre = []
 
-        self.aluno_landmarks = []
-        self.mestre_landmarks = []
+        # Armazena a lista de dicionários de landmarks (para comparação)
+        self.aluno_landmarks_list = []
+        self.mestre_landmarks_list = []
+
+        # CORREÇÃO: Armazena o objeto original de landmarks do MediaPipe (para redesenho)
+        self.aluno_landmarks_raw = []
+        self.mestre_landmarks_raw = []
+
         self.comparison_results = []
 
         self.cap_aluno = None
@@ -48,9 +51,7 @@ class VideoAnalyzer:
         logger.info("Variáveis de estado do VideoAnalyzer configuradas.")
 
     def load_video_from_bytes(self, video_bytes: bytes, is_aluno: bool):
-        """
-        Carrega um vídeo a partir de bytes e o salva temporariamente para processamento.
-        """
+        # ... (código inalterado) ...
         logger.info(
             f"Carregando vídeo a partir de bytes para {'aluno' if is_aluno else 'mestre'}."
         )
@@ -76,9 +77,7 @@ class VideoAnalyzer:
             raise
 
     def analyze_and_compare(self, post_analysis_callback, progress_callback=None):
-        """
-        Inicia a análise em uma nova thread.
-        """
+        # ... (código inalterado) ...
         if self.is_processing:
             logger.info("Análise já em andamento.")
             return
@@ -93,20 +92,22 @@ class VideoAnalyzer:
         self.processing_thread.start()
 
     def _run_analysis_thread(self, progress_callback=None):
-        """
-        Método executado na thread. Processa os vídeos, compara os frames e reporta o progresso.
-        """
         try:
             logger.info("Thread de análise iniciada.")
 
             # Limpa listas de dados de análises anteriores
-            self.aluno_landmarks.clear()
-            self.mestre_landmarks.clear()
-            self.processed_frames_aluno.clear()
-            self.processed_frames_mestre.clear()
-            self.raw_frames_aluno.clear()
-            self.raw_frames_mestre.clear()
-            self.comparison_results.clear()
+            for lst in [
+                self.aluno_landmarks_list,
+                self.mestre_landmarks_list,
+                self.aluno_landmarks_raw,
+                self.mestre_landmarks_raw,
+                self.processed_frames_aluno,
+                self.processed_frames_mestre,
+                self.raw_frames_aluno,
+                self.raw_frames_mestre,
+                self.comparison_results,
+            ]:
+                lst.clear()
 
             num_frames = min(
                 int(self.cap_aluno.get(cv2.CAP_PROP_FRAME_COUNT)),
@@ -121,11 +122,9 @@ class VideoAnalyzer:
                 if not ret_aluno or not ret_mestre:
                     break
 
-                # Armazena os frames originais
                 self.raw_frames_aluno.append(frame_aluno)
                 self.raw_frames_mestre.append(frame_mestre)
 
-                # Estima a pose (sem desenhar ainda)
                 results_aluno = self.pose_estimator.estimate_pose(frame_aluno)
                 results_mestre = self.pose_estimator.estimate_pose(frame_mestre)
 
@@ -140,27 +139,28 @@ class VideoAnalyzer:
                 self.processed_frames_aluno.append(annotated_aluno)
                 self.processed_frames_mestre.append(annotated_mestre)
 
-                # Extrai landmarks para comparação
-                lm_aluno = self.pose_estimator.get_landmarks_as_list(
+                # Armazena ambos os formatos de landmarks
+                lm_list_aluno = self.pose_estimator.get_landmarks_as_list(
                     results_aluno.pose_landmarks
                 )
-                lm_mestre = self.pose_estimator.get_landmarks_as_list(
+                lm_list_mestre = self.pose_estimator.get_landmarks_as_list(
                     results_mestre.pose_landmarks
                 )
-                self.aluno_landmarks.append(lm_aluno)
-                self.mestre_landmarks.append(lm_mestre)
 
-                # Compara as poses e gera feedback
+                self.aluno_landmarks_list.append(lm_list_aluno)
+                self.mestre_landmarks_list.append(lm_list_mestre)
+                self.aluno_landmarks_raw.append(results_aluno.pose_landmarks)
+                self.mestre_landmarks_raw.append(results_mestre.pose_landmarks)
+
                 score, feedback, diffs = self.motion_comparator.compare_poses(
-                    lm_aluno, lm_mestre
+                    lm_list_aluno, lm_list_mestre
                 )
                 self.comparison_results.append(
                     {"score": score, "feedback": feedback, "diffs": diffs}
                 )
 
                 if progress_callback:
-                    percent_complete = (i + 1) / num_frames
-                    progress_callback(percent_complete)
+                    progress_callback((i + 1) / num_frames)
 
         except Exception as e:
             logger.error(f"Erro na thread de análise: {e}", exc_info=True)
@@ -172,12 +172,8 @@ class VideoAnalyzer:
                 self.cap_mestre.release()
             logger.info("Thread de análise finalizada.")
 
-    # ... get_best_frames e get_worst_frames foram removidos pois a lógica agora está em main.py
-    # para usar os frames brutos e os landmarks/diffs corretos.
-    # Isso simplifica o VideoAnalyzer, que agora foca apenas na análise.
-
     def __del__(self):
-        """Limpa os arquivos temporários."""
+        # ... (código inalterado) ...
         logger.info("Destruindo VideoAnalyzer e limpando arquivos.")
         try:
             if self.video_aluno_path and os.path.exists(self.video_aluno_path):
