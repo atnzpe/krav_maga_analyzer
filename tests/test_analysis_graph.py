@@ -17,7 +17,7 @@ import flet as ft
 import plotly.graph_objects as go
 
 # Importa as classes e funções que serão testadas ou mockadas.
-from src.Old_main_flet import KravMagaApp
+from main import KravMagaApp
 from src.video_analyzer import VideoAnalyzer
 
 # --------------------------------------------------------------------------------------------------

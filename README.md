@@ -16,11 +16,9 @@ Uma aplicação de desktop para análise e aprimoramento de técnicas de Krav Ma
 
 - **Upload de Vídeos:** Carregue facilmente o vídeo do aluno e do mestre.
 - **Visualização Lado a Lado:** Assista aos dois vídeos sincronizados para uma comparação visual direta.
-- **✨ NOVO: Barra de Progresso da Análise:** Acompanhe o andamento do processamento em tempo real.
+- **✨ NOVO: Visualização 3D:** Alterne para uma renderização 3D do esqueleto para analisar a postura de diferentes ângulos.
+- **Barra de Progresso da Análise:** Acompanhe o andamento do processamento em tempo real.
 - **Detecção de Pose:** Utiliza o Google MediaPipe para rastrear os principais pontos do corpo.
-- **Controles de Reprodução Completos:** Play/Pause, navegação frame a frame e slider interativo.
-- **Feedback em Tempo Real:** Receba uma pontuação de similaridade e dicas de correção para cada frame.
-- **Geração de Relatório em PDF Aprimorada:** Exporte um resumo profissional da sua análise.
 
 ## Tecnologias Utilizadas
 
