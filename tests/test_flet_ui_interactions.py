@@ -12,7 +12,7 @@ import sys
 # Adiciona o diretório raiz ao path para permitir a importação dos módulos da aplicação.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.main_flet import KravMagaApp
+from src.Old_main_flet import KravMagaApp
 
 # --------------------------------------------------------------------------------------------------
 # Fixtures de Teste (Configuração do Ambiente de Teste)

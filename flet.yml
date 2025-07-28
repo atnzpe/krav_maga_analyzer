@@ -1,4 +1,5 @@
 # flet.yml
+module_name: src.main_flet
 project: Krav Maga Analyzer
 version: 1.14.0
 build_version: 1

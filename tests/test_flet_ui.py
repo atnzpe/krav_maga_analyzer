@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Importa a função main da sua aplicação Flet
-from src.main_flet import main
+from src.Old_main_flet import main
 
 
 @pytest.fixture(scope="module", autouse=True)

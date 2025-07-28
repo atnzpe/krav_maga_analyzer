@@ -11,7 +11,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Importa a função a ser testada e as dependências que ela manipula
-from src.main_flet import pick_file_result
+from src.Old_main_flet import pick_file_result
 from src.video_analyzer import VideoAnalyzer
 from src.utils import FeedbackManager
 
