@@ -15,9 +15,9 @@ Uma aplicação de desktop para análise e aprimoramento de técnicas de Krav Ma
 ## Funcionalidades
 
 - **Upload de Vídeos:** Carregue facilmente o vídeo do aluno e do mestre.
+- **✨ NOVO: Biblioteca de Referência:** Selecione vídeos de mestre pré-carregados de uma lista para análise imediata.
 - **Visualização Lado a Lado:** Assista aos dois vídeos sincronizados para uma comparação visual direta.
-- **✨ NOVO: Visualização 3D:** Alterne para uma renderização 3D do esqueleto para analisar a postura de diferentes ângulos.
-- **Barra de Progresso da Análise:** Acompanhe o andamento do processamento em tempo real.
+- **Visualização 3D:** Alterne para uma renderização 3D do esqueleto para analisar a postura de diferentes ângulos.
 - **Detecção de Pose:** Utiliza o Google MediaPipe para rastrear os principais pontos do corpo.
 
 ## Tecnologias Utilizadas
@@ -30,14 +30,23 @@ Uma aplicação de desktop para análise e aprimoramento de técnicas de Krav Ma
 - **scikit-learn**
 - **fpdf2**
 
-## Como Usar
-
 1.  Execute a aplicação.
-2.  Carregue os vídeos do aluno e do mestre.
-3.  Clique em "Analisar Movimentos" e acompanhe o progresso.
-4.  Aguarde o processamento.
+2.  Carregue o vídeo do aluno usando o botão "Upload Vídeo do Aluno".
+3.  Para o vídeo de referência, você tem duas opções:
+    * **Usar a Biblioteca:** Selecione um movimento na lista "Ou selecione um movimento de referência".
+    * **Usar seu próprio vídeo:** Clique em "Upload Vídeo do Mestre" e escolha um arquivo.
+4.  Clique em "Analisar Movimentos" e acompanhe o progresso.
 5.  Use os controles de reprodução para analisar os movimentos em detalhe.
 6.  Clique em "Gerar Relatório PDF" para salvar e visualizar seu resumo completo e aprimorado.
+
+### Adicionando Novos Vídeos de Referência
+
+Para adicionar seus próprios vídeos à biblioteca pré-carregada:
+
+1.  Crie uma pasta chamada `assets` na raiz do seu projeto (se ainda não existir).
+2.  Dentro de `assets`, crie outra pasta chamada `master_videos`.
+3.  Copie seus arquivos de vídeo (`.mp4`, `.mov`, etc.) para a pasta `assets/master_videos`.
+4.  Reinicie a aplicação. Os novos vídeos aparecerão automaticamente na lista de seleção!
 
 ## Como Instalar e Rodar
 
